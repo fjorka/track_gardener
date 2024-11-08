@@ -63,6 +63,10 @@ jobs:
 
       - name: Coverage
         uses: codecov/codecov-action@v3
+        with:
+          file: src/track_gardener/_tests/coverage.xml
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   deploy:
     # this will run when you have tagged a commit, starting with "v*"
