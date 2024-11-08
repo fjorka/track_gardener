@@ -9,6 +9,7 @@
 
 A plugin facilitating manual curation of tracking results.
 
+
 ----------------------------------
 
 This [napari] plugin was generated with [copier] using the [napari-plugin-template].
