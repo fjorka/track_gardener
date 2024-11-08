@@ -3,35 +3,16 @@ display_name: Track Gardener
 # use 'hidden' to remove plugin from napari hub search results
 visibility: public
 # see https://napari.org/stable/plugins/manifest.html for valid categories
-categories: ["Annotation", "Segmentation", "Acquisition"]
+categories: ["Annotation"]
 contributions:
   commands:
-    - id: track-gardener.make_sample_data
-      python_name: track_gardener._sample_data:make_sample_data
-      title: Load sample data from Track Gardener
-    - id: track-gardener.make_container_widget
-      python_name: track_gardener:ImageThreshold
-      title: Make threshold Container widget
-    - id: track-gardener.make_magic_widget
-      python_name: track_gardener:threshold_magic_widget
-      title: Make threshold magic widget
-    - id: track-gardener.make_function_widget
-      python_name: track_gardener:threshold_autogenerate_widget
-      title: Make threshold function widget
-    - id: track-gardener.make_qwidget
-      python_name: track_gardener:ExampleQWidget
-      title: Make example QWidget
+    - id: track-gardener.TrackGardener
+      python_name: track_gardener.widget.widget_main:TrackGardener
+      title: Main Track Gardener Widget
   sample_data:
     - command: track-gardener.make_sample_data
       display_name: Track Gardener
       key: unique_id.1
   widgets:
-    - command: track-gardener.make_container_widget
-      display_name: Container Threshold
-    - command: track-gardener.make_magic_widget
-      display_name: Magic Threshold
-    - command: track-gardener.make_function_widget
-      autogenerate: true
-      display_name: Autogenerate Threshold
-    - command: track-gardener.make_qwidget
-      display_name: Example QWidget
+    - command: track-gardener.TrackGardener
+      display_name: Track Gardener
