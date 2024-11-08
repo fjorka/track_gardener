@@ -66,6 +66,11 @@ class TrackGardener(QWidget):
                 self.viewer.window.remove_dock_widget(widget)
             self.napari_widgets = []
 
+            # remove added graphs
+            if len(self.settings_window.added_widgets) > 1:
+                for widget in self.settings_window.added_widgets[1:]:
+                    self.viewer.window.remove_dock_widget(widget)
+
             # disconnect labels connections
             self.viewer.camera.events.zoom.disconnect(
                 self.navigation_widget.build_labels

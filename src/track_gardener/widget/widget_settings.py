@@ -137,14 +137,16 @@ class SettingsWidget(QWidget):
         reorganize widgets
         """
 
-        # remove all previous widgets
-        for widget in self.added_widgets:
-            widget.hide()
-            self.mWidget.layout().removeWidget(widget)
-        self.added_widgets = []
-
+        # clear main widgets
         if self.clear_widgets_callback is not None:
             self.clear_widgets_callback()
+
+        # remove 'Add Graph' button
+        if len(self.added_widgets) > 0:
+            self.added_widgets[0].hide()
+            self.mWidget.layout().removeWidget(self.added_widgets[0])
+
+        self.added_widgets = []
 
         self.loadExperiment()
         self.loadTracking()
@@ -298,3 +300,5 @@ class SettingsWidget(QWidget):
         self.viewer.window.add_dock_widget(
             graph_widget, area="bottom", name="New Graph"
         )
+
+        self.added_widgets.append(graph_widget)
