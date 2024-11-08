@@ -3,7 +3,7 @@
 [![License BSD-3](https://img.shields.io/pypi/l/track-gardener.svg?color=green)](https://github.com/fjorka/track-gardener/raw/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/track-gardener.svg?color=green)](https://pypi.org/project/track-gardener)
 [![Python Version](https://img.shields.io/pypi/pyversions/track-gardener.svg?color=green)](https://python.org)
-[![tests](https://github.com/fjorka/track-gardener/workflows/tests/badge.svg)](https://github.com/fjorka/track-gardener/actions)
+[![tests](https://github.com/fjorka/track-gardener/workflows/tests/badge.svg)](https://github.com/fjorka/track-gardener/actions/workflows/tests)
 [![codecov](https://codecov.io/gh/fjorka/track-gardener/branch/main/graph/badge.svg)](https://codecov.io/gh/fjorka/track-gardener)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/track-gardener)](https://napari-hub.org/plugins/track-gardener)
 
