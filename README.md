@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/track-gardener.svg?color=green)](https://pypi.org/project/track-gardener)
 [![Python Version](https://img.shields.io/pypi/pyversions/track-gardener.svg?color=green)](https://python.org)
 [![tests](https://github.com/fjorka/track_gardener/actions/workflows/test_and_deploy.yaml/badge.svg)](https://github.com/fjorka/track_gardener/actions/workflows/test_and_deploy.yaml)
-[![codecov](https://codecov.io/gh/fjorka/track-gardener/branch/main/graph/badge.svg)](https://codecov.io/gh/fjorka/track-gardener)
+[![codecov](https://codecov.io/github/fjorka/track_gardener/graph/badge.svg?token=436E4J8MUI)](https://codecov.io/github/fjorka/track_gardener)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/track-gardener)](https://napari-hub.org/plugins/track-gardener)
 
 A plugin facilitating manual curation of tracking results.
