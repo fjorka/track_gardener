@@ -85,3 +85,4 @@ venv/
 
 # written by setuptools_scm
 **/_version.py
+valid_path.db

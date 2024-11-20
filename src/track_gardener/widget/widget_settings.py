@@ -23,7 +23,7 @@ from sqlalchemy.orm import sessionmaker
 import track_gardener.db.db_functions as fdb
 from track_gardener.db.config_functions import (
     create_calculate_signals_function,
-    testConfigFile,
+    validateConfigFile,
 )
 from track_gardener.widget.signal_graph_widget import CellGraphWidget
 
@@ -116,7 +116,7 @@ class SettingsWidget(QWidget):
 
             # test if the config file is correct
             self.viewer.status = "Checking the config file..."
-            status, msg = testConfigFile(fileName)
+            status, msg = validateConfigFile(fileName)
 
             if status:
                 # display a message

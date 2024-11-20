@@ -65,6 +65,7 @@ jobs:
         uses: codecov/codecov-action@v3
         with:
           file: src/track_gardener/_tests/coverage.xml
+          name: track_gardener
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 

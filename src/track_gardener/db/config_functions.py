@@ -13,7 +13,7 @@ import track_gardener.db.db_functions as fdb
 from track_gardener.db.db_model import CellDB
 
 
-def testConfigFile(file_path):
+def validateConfigFile(file_path):
     """
     Test whether the config file is executable.
     """

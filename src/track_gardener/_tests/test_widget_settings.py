@@ -83,8 +83,8 @@ def test_open_yaml_dialog(viewer, mocker):
         "qtpy.QtWidgets.QFileDialog.getOpenFileName",
         return_value=("test.yaml", None),
     )
-    testConfigFile_mock = mocker.patch(
-        "track_gardener.widget.widget_settings.testConfigFile",
+    validateConfigFile_mock = mocker.patch(
+        "track_gardener.widget.widget_settings.validateConfigFile",
         return_value=(True, ""),
     )
     loadConfigFile_mock = mocker.patch(
@@ -97,7 +97,7 @@ def test_open_yaml_dialog(viewer, mocker):
     set_widget.openFileDialog()
 
     mock_getOpenFileName.assert_called_once()
-    testConfigFile_mock.assert_called_once_with("test.yaml")
+    validateConfigFile_mock.assert_called_once_with("test.yaml")
     loadConfigFile_mock.assert_called_once()
     reorganize_mock.assert_called_once()
 
