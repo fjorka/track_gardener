@@ -1,79 +1,10 @@
-from pathlib import Path
 from unittest.mock import MagicMock
 
-import numpy as np
-import pytest
 from qtpy.QtCore import Qt
 from qtpy.QtTest import QTest
 from qtpy.QtWidgets import QDialog, QPushButton
-from sqlalchemy import MetaData, create_engine, inspect
-from sqlalchemy.orm import sessionmaker
 
-from track_gardener.db.db_model import CellDB, TrackDB
 from track_gardener.widget.widget_modifications import ModificationWidget
-
-
-@pytest.fixture(scope="function")
-def db_session():
-    # see "./tests/fixtures/test_database_content.PNG" for a visual representation of copied part of the test database
-    test_db_path = str(
-        Path(__file__).parent / "fixtures" / "db_2tables_test.db"
-    )
-    original_engine = create_engine(f"sqlite:///{test_db_path}")
-    original_metadata = MetaData()
-    original_metadata.reflect(bind=original_engine)
-
-    # Create an in-memory SQLite database
-    memory_engine = create_engine("sqlite:///:memory:")
-    original_metadata.create_all(memory_engine)
-
-    # Open sessions
-    OriginalSession = sessionmaker(bind=original_engine)
-    MemorySession = sessionmaker(bind=memory_engine)
-
-    original_session = OriginalSession()
-    memory_session = MemorySession()
-
-    # Copy tables
-    cells = original_session.query(CellDB).all()
-    tracks = original_session.query(TrackDB).all()
-
-    for cell in cells:
-        # Create a new instance of CellDB
-        new_cell = CellDB()
-
-        # Deep copy
-        for key, value in inspect(cell).attrs.items():
-            setattr(new_cell, key, value.value)
-
-        memory_session.add(new_cell)
-
-    for track in tracks:
-        # Create a new instance of TrackDB
-        new_track = TrackDB()
-
-        # Deep copy
-        for key, value in inspect(track).attrs.items():
-            setattr(new_track, key, value.value)
-
-        memory_session.add(new_track)
-
-    original_session.close()
-
-    yield memory_session
-
-    memory_session.close()
-
-
-@pytest.fixture(scope="function")
-def viewer(make_napari_viewer):
-
-    viewer = make_napari_viewer()
-    viewer.add_labels(data=np.zeros([10000, 10000], dtype=int))
-
-    yield viewer
-
-    viewer.close()
 
 
 def test_select_label_to_t_boxes(viewer, db_session):
