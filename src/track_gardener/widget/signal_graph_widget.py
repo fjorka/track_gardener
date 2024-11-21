@@ -10,33 +10,6 @@ from qtpy.QtWidgets import (
 from track_gardener.graph.signal_graph import SignalGraph
 
 
-class AddListGraphWidget(QWidget):
-    def __init__(self, napari_viewer, sql_session, signal_list=None):
-        super().__init__()
-
-        self.setLayout(QVBoxLayout())
-
-        self.viewer = napari_viewer
-        self.session = sql_session
-        self.signal_list = signal_list
-
-        add_list_graph_btn = QPushButton("+")
-        add_list_graph_btn.clicked.connect(self.add_graph_with_list)
-        self.layout().addWidget(add_list_graph_btn)
-
-    def add_graph_with_list(self):
-        """
-        Add a signal graph with a list of signals.
-        """
-        if self.signal_list is None:
-            self.viewer.status = "No signal list provided."
-        else:
-            list_graph_widget = CellGraphWidget(
-                self.viewer, self.session, signal_list=self.signal_list
-            )
-            self.viewer.window.add_dock_widget(list_graph_widget, area="right")
-
-
 class CellGraphWidget(QWidget):
     def __init__(
         self,
@@ -126,10 +99,18 @@ class CellGraphWidget(QWidget):
         else:
             self.layout().addLayout(rowLayout)
 
-        # in case we just added the second signal
-        if self.layout().count() == 3:
-            last_row = self.layout().itemAt(1)
-            last_row.itemAt(3).widget().setEnabled(True)
+        # disable button of the last row
+        row_number = self.layout().count()
+        if row_number == 2:
+            self.layout().itemAt(row_number - 1).itemAt(3).widget().setEnabled(
+                False
+            )
+
+        # enable button of the row before the last one
+        if row_number == 3:
+            self.layout().itemAt(row_number - 2).itemAt(3).widget().setEnabled(
+                True
+            )
 
     def createSignalComboBox(self, signal=None):
         comboBox = QComboBox()
