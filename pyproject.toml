@@ -29,6 +29,12 @@ dependencies = [
     "magicgui",
     "qtpy",
     "scikit-image",
+    "pyqtgraph",
+    "pathlib",
+    "yaml",
+    "sqlalchemy",
+    "dask",
+    "zarr",
 ]
 
 [project.optional-dependencies]
