@@ -24,12 +24,24 @@ https://napari.org/stable/plugins/index.html
 
 ## Installation
 
-You can install `track-gardener` via [pip]:
+Preliminary installation instructions while the package is not in pypi:
 
-    pip install track-gardener
-
-
-
+- Create a conda environment:
+```bash
+conda create -y -n gardener-env python=3.10 -c conda-forge
+```
+- Activate the environment:
+```bash
+conda activate gardener-env
+```
+- Install napari (detailed instructions here: https://napari.org/dev/tutorials/fundamentals/installation.html):
+```bash
+pip install "napari[all]"
+```
+- Install the Track-Gardener plugin directly from github:
+```bash
+pip install git+https://github.com/fjorka/track_gardener.git
+```
 
 ## Contributing
 
