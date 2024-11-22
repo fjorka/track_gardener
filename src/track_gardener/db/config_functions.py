@@ -304,7 +304,7 @@ def create_calculate_signals_function(config):
         if len(gardener_signal) > 0:
             for m in gardener_signal:
                 f = load_function_from_module(
-                    "tracks_interactions.db.db_functions", m["function"]
+                    "track_gardener.db.db_functions", m["function"]
                 )
                 result = f(cell, t, ch_data_list, kwargs=m)
                 for ch in m["channels"]:
