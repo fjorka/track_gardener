@@ -673,7 +673,7 @@ def ring_intensity(cell, t, ch_data_list, kwargs):
         # Compute the desired statistic (e.g., mean or sum)
         ring_signal_mean = signal_in_ring.mean()
 
-        if ring_signal_mean is da.core.Array:
+        if isinstance(ring_signal_mean, da.Array):
             ring_signal_mean = ring_signal_mean.compute()
 
         signal_list.append(ring_signal_mean)
