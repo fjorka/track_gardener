@@ -21,6 +21,7 @@ https://github.com/napari/napari-plugin-template#getting-started
 and review the napari docs for plugin developers:
 https://napari.org/stable/plugins/index.html
 -->
+<img src="./src/track_gardener/icons/track_gardener_logo.png" alt="Project Logo" width="300"/>
 
 ## Installation
 
