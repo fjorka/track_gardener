@@ -6,6 +6,7 @@
 [![tests](https://github.com/fjorka/track_gardener/actions/workflows/test_and_deploy.yaml/badge.svg)](https://github.com/fjorka/track_gardener/actions/workflows/test_and_deploy.yaml)
 [![codecov](https://codecov.io/github/fjorka/track_gardener/graph/badge.svg?token=436E4J8MUI)](https://codecov.io/github/fjorka/track_gardener)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/track-gardener)](https://napari-hub.org/plugins/track-gardener)
+[![Docs](https://img.shields.io/badge/docs-online-blue)](https://fjorka.github.io/track_gardener/)
 
 A plugin facilitating manual curation of tracking results.
 
