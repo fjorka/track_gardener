@@ -1,0 +1,21 @@
+site_name: Track Gardener
+theme:
+  name: material
+
+nav:
+  - Home: index.md
+  - Usage: usage.md
+
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_root_toc_entry: false
+            merge_init_into_class: true
+            show_source: false
+            extra:
+              show_symbol_type: true
