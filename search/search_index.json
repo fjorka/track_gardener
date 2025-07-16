@@ -1,0 +1,1 @@
+{"config":{"lang":["en"],"separator":"[\\s\\-]+","pipeline":["stopWordFilter"]},"docs":[{"location":"","title":"Track Gardener","text":"<p>Welcome to the documentation for the TrackGardener napari plugin. Use the navigation to explore tutorials, API documentation, and configuration details.</p>"},{"location":"usage/","title":"Usage","text":"<p>Track Gardener is ...</p>"}]}
