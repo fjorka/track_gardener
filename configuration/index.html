@@ -12,13 +12,15 @@
         <link rel="prev" href="..">
       
       
+        <link rel="next" href="../initialize/">
+      
       
       <link rel="icon" href="../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.15">
     
     
       
-        <title>Usage - Track Gardener</title>
+        <title>Configuration File - Track Gardener</title>
       
     
     
@@ -62,7 +64,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#usage" class="md-skip">
+        <a href="#experiment_settings" class="md-skip">
           Skip to content
         </a>
       
@@ -98,7 +100,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Usage
+              Configuration File
             
           </span>
         </div>
@@ -222,10 +224,88 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
-        
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Configuration File
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
       
       <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configuration File
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#experiment_settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      experiment_settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#signal_channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      signal_channels
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cell_measurements" class="md-nav__link">
+    <span class="md-ellipsis">
+      cell_measurements
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../initialize/" class="md-nav__link">
         
   
   
@@ -236,7 +316,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -258,8 +337,41 @@
   
   
   
-    
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#experiment_settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      experiment_settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#signal_channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      signal_channels
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cell_measurements" class="md-nav__link">
+    <span class="md-ellipsis">
+      cell_measurements
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
   
 </nav>
                   </div>
@@ -275,8 +387,42 @@
 
 
 
-<h1 id="usage">Usage</h1>
-<p>Track Gardener is ...</p>
+  <h1>Configuration File</h1>
+
+<p>Track Gardener loads experimental data, measurements, and visualisation options from a YAML configuration file.
+When the user selects a configuration file in the settings tab, the plugin first validates the file and then reads the parameters.</p>
+<p>The configuration file is divided into several sections.</p>
+<h3 id="experiment_settings">experiment_settings</h3>
+<p>Defines general metadata for the session.
+<code>experiment_name</code> and <code>experiment_description</code> are optional strings used only to display context inside Track Gardener.</p>
+<p>Example:</p>
+<pre><code class="language-yaml">experiment_settings:
+  experiment_name: Test experiment
+  description: Test description of an experiment
+</code></pre>
+<h3 id="signal_channels">signal_channels</h3>
+<p>List of image channels that will be loaded into napari. Each channel dictionary may contain:</p>
+<ul>
+<li><code>name</code> – label used inside the viewer.</li>
+<li><code>path</code> – path to a zarr file containing the image data. Validation enforces the <code>*.zarr</code> format.</li>
+<li><code>lut</code> – colour map displayed in napari.</li>
+<li><code>contrast_limits</code> – optional two-element list setting contrast limits.</li>
+</ul>
+<h3 id="cell_measurements">cell_measurements</h3>
+<p>Describes which measurements should be computed for every cell. The configuration loader dynamically builds a measurement routine based on these entries.</p>
+<p>Each entry defines:</p>
+<ul>
+<li><code>function</code> – name of the measurement function.</li>
+<li><code>source</code> – where the function is implemented:<ul>
+<li><code>regionprops</code> refers to <code>skimage.measure.regionprops</code> properties.</li>
+<li><code>track_gardener</code> refers to functions provided by the plugin.</li>
+<li>any other string is treated as a path to a Python file containing a custom function.</li>
+</ul>
+</li>
+<li><code>channels</code> – optional list of channel names used as intensity images.</li>
+<li><code>name</code> – optional custom name for the resulting signal.</li>
+<li>Additional keyword arguments are forwarded to the measurement function (e.g. <code>ring_width</code> for <code>ring_intensity</code>).</li>
+</ul>
 
 
 
