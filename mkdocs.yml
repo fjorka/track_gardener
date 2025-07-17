@@ -4,7 +4,8 @@ theme:
 
 nav:
   - Home: index.md
-  - Usage: usage.md
+  - Configuration File: configuration.md
+  - Usage: initialize.md
 
 
 plugins:
