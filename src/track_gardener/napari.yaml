@@ -9,10 +9,10 @@ contributions:
     - id: track-gardener.TrackGardener
       python_name: track_gardener.widget.widget_main:TrackGardener
       title: Main Track Gardener Widget
-  sample_data:
-    - command: track-gardener.make_sample_data
-      display_name: Track Gardener
-      key: unique_id.1
+  # sample_data:
+  #   - command: track-gardener.make_sample_data
+  #     display_name: Track Gardener
+  #     key: unique_id.1
   widgets:
     - command: track-gardener.TrackGardener
       display_name: Track Gardener

@@ -40,9 +40,23 @@ def validate_geff_seg_ids(
         x_vals = props["x"]["values"][:].astype(int)
         y_vals = props["y"]["values"][:].astype(int)
 
+    # check if masking is available
+    if "missing" in props[seg_id_field]:
+        missing_mask = props[seg_id_field]["missing"][:]
+        seg_ids = np.ma.masked_array(seg_ids, mask=missing_mask)
+        t_vals = np.ma.masked_array(t_vals, mask=missing_mask)
+        if check_xy_position:
+            x_vals = np.ma.masked_array(x_vals, mask=missing_mask)
+            y_vals = np.ma.masked_array(y_vals, mask=missing_mask)
+
     logger.info("Beginning node validation...")
     results = []
     for idx, (t, seg_id) in enumerate(zip(t_vals, seg_ids)):
+        if np.ma.is_masked(seg_id):
+            logger.warning(
+                f"Seg ID is masked for {seg_id} at frame {t}, skipping."
+            )
+            continue
         try:
             label_frame = seg_array[t]
         except IndexError:

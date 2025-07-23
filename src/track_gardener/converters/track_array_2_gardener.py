@@ -1,7 +1,9 @@
 import os
 from math import sqrt
+from typing import List, Sequence
 
 import dask.array as da
+import numpy as np
 from loguru import logger
 from skimage.measure import regionprops
 from sqlalchemy import create_engine
@@ -12,24 +14,15 @@ from track_gardener.db.config_functions import (
 )
 from track_gardener.db.db_model import NO_PARENT, Base, CellDB, TrackDB
 
+# rename these converters to more meaningful names
 
-def convert_array_segmentations_to_db(labeled_arrays, config):
-    """
-    Funciton to convert labeled arrays to Track Gardener database.
-    Handles DB/session setup, validates channel paths, and loops over timepoints.
 
-    - labeled_arrays: labelled stack, assuming t is the first dimension (T, H, W)
-    - config: configuration dictionary
-    """
-
-    db_path = config["database"]["path"]
-    engine = create_engine(f"sqlite:///{db_path}")
-    Session = sessionmaker(bind=engine)
-    Base.metadata.create_all(engine)
+def convert_array_segmentations_to_cells(labeled_arrays, config, session):
+    """ """
 
     signal_channels = config["signal_channels"]
 
-    # Check channel path existence check
+    # Check channel path existence
     for ch in signal_channels:
         path = ch["path"]
         if not os.path.exists(path):
@@ -41,35 +34,49 @@ def convert_array_segmentations_to_db(labeled_arrays, config):
     # Open channel arrays (assume one zarr per channel, shape = (T, H, W))
     channel_arrays = [da.from_zarr(ch["path"]) for ch in signal_channels]
 
-    with Session() as session:
-        for time_point, labeled_array in enumerate(labeled_arrays):
-            # Extract the channel frames for this timepoint
-            frame_channel_arrays = [arr[time_point] for arr in channel_arrays]
-            convert_labeled_frame_to_db(
-                labeled_array=labeled_array,
-                session=session,
-                image_arrays=frame_channel_arrays,
-                signal_function=signal_function,
-                time_point=time_point,
-            )
+    counter = 0
+    for time_point, labeled_array in enumerate(labeled_arrays):
+        # Extract the channel frames for this timepoint
+        frame_channel_arrays = [arr[time_point] for arr in channel_arrays]
+        cell_list, counter = convert_labeled_frame_to_cells(
+            labeled_array=labeled_array,
+            image_arrays=frame_channel_arrays,
+            signal_function=signal_function,
+            time_point=time_point,
+            id=counter,
+        )
+        session.bulk_save_objects(cell_list)
+        session.commit()
 
 
-def convert_labeled_frame_to_db(
+def convert_array_segmentations_to_db(labeled_arrays, config):
+    """ """
+    db_path = config["database"]["path"]
+    engine = create_engine(f"sqlite:///{db_path}")
+    Session = sessionmaker(bind=engine)
+    Base.metadata.create_all(engine)
+    session = Session()
+
+    # add cells
+    convert_array_segmentations_to_cells(labeled_arrays, config, session)
+
+    # build TrackDB based on the CellDB table
+    rows = session.query(CellDB.track_id, CellDB.t).all()
+    track_id_seq, t_seq = zip(*rows) if rows else ([], [])
+    tracks = build_trackdb_from_celldb(track_id_seq, t_seq)
+    session.bulk_save_objects(tracks)
+    session.commit()
+
+
+def convert_labeled_frame_to_cells(
     labeled_array,
-    session,
     image_arrays,
     signal_function,
     time_point,
-):
+    counter,  # counter of cells processed so far
+) -> List[CellDB]:
     """
     Process a single labeled frame and store region data in the database.
-
-    Parameters:
-    - labeled_array: 2D np/dask array with track IDs for this frame
-    - session: active SQLAlchemy DB session
-    - image_arrays: list of channel frames (H, W) for this timepoint
-    - signal_function: callable(region, time_point, image_arrays)
-    - time_point: int, index of this frame in the time series
     """
     # Ensure labeled_array is numpy array
     label_np = (
@@ -81,30 +88,12 @@ def convert_labeled_frame_to_db(
 
     logger.info(f"Found {len(regions)} labeled objects at t={time_point}")
 
+    cell_list = []
     for region in regions:
         label = region.label
         centroid = tuple(map(int, region.centroid))
         bbox = region.bbox
         mask = region.image
-
-        # --- TrackDB entry ---
-        track = session.query(TrackDB).filter_by(track_id=label).first()
-        if track is None:
-            track = TrackDB(
-                track_id=label,
-                parent_track_id=NO_PARENT,
-                root=label,
-                t_begin=time_point,
-                t_end=time_point,
-            )
-            logger.debug(f"Created new track {label}")
-            session.add(track)
-        else:
-            # Update t_begin and t_end if needed
-            if time_point < track.t_begin:
-                track.t_begin = time_point
-            if time_point > track.t_end:
-                track.t_end = time_point
 
         # --- Signal computation ---
         signal_data = signal_function(region, time_point, image_arrays)
@@ -113,7 +102,7 @@ def convert_labeled_frame_to_db(
         cell = CellDB(
             track_id=label,
             t=time_point,
-            id=int(f"{time_point}{label:05d}"),
+            id=id,
             row=centroid[0],
             col=centroid[1],
             bbox_0=bbox[0],
@@ -124,10 +113,51 @@ def convert_labeled_frame_to_db(
             signals=signal_data,
             tags={},
         )
-        session.add(cell)
+        cell_list.append(cell)
+        counter += 1
 
-    session.commit()
-    logger.success(f"Committed {len(regions)} cells at t={time_point}")
+    return cell_list, counter
+
+
+def build_trackdb_from_celldb(
+    track_id_seq: Sequence[int], t_seq: Sequence[int]
+) -> List[TrackDB]:
+    """Builds TrackDB objects from track_id and t sequences using efficient NumPy operations.
+
+    Args:
+        track_id_seq: Sequence of track IDs (ints).
+        t_seq: Sequence of frame indices (ints), parallel to track_id_seq.
+
+    Returns:
+        List[TrackDB]: One TrackDB object per unique track_id, with t_begin/min(t) and t_end/max(t).
+    """
+    track_ids = np.asarray(track_id_seq)
+    ts = np.asarray(t_seq)
+    if track_ids.shape != ts.shape:
+        raise ValueError("track_id_seq and t_seq must be the same length.")
+
+    # Find unique track IDs and the indices to reconstruct groups
+    unique_tracks, inv = np.unique(track_ids, return_inverse=True)
+
+    t_min = np.full(unique_tracks.shape, np.inf)
+    t_max = np.full(unique_tracks.shape, -np.inf)
+
+    # For each entry, update min/max using the unique track index
+    np.minimum.at(t_min, inv, ts)
+    np.maximum.at(t_max, inv, ts)
+
+    # Construct TrackDB objects
+    tracks = []
+    for i, tid in enumerate(unique_tracks):
+        track = TrackDB(
+            track_id=int(tid),
+            parent_track_id=NO_PARENT,
+            root=int(tid),
+            t_begin=int(t_min[i]),
+            t_end=int(t_max[i]),
+        )
+        tracks.append(track)
+    return tracks
 
 
 def assign_parent_offspring_relationships(db_path, parent_radius=20):

@@ -77,6 +77,9 @@ venv/
 # IPython Notebook
 .ipynb_checkpoints
 
+# sandbox - custom development and test area
+sandbox/
+
 # pyenv
 .python-version
 
