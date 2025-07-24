@@ -34,7 +34,7 @@ Preliminary installation instructions while the package is not in pypi:
 
 - Create a conda environment:
 ```bash
-conda create -y -n gardener-env python=3.10 -c conda-forge
+conda create -y -n gardener-env python=3.11 -c conda-forge
 ```
 - Activate the environment:
 ```bash
