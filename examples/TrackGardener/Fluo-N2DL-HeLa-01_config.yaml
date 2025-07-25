@@ -4,7 +4,7 @@ experiment_settings:
 
 signal_channels:
   - name: ch0
-    path: D:\track-gardener\example_data\Fluo-N2DL-HeLa-01_sample.zarr\images
+    path: D:\track-gardener\examples\Fluo-N2DL-HeLa-01_images.zarr\images
     lut: viridis
 
 cell_measurements:
@@ -17,7 +17,7 @@ cell_measurements:
       - ch0
 
 database:
-  path: D:\track-gardener\example_data\Fluo-N2DL-HeLa-01_sample.db
+  path: D:\track-gardener\examples\TrackGardener\Fluo-N2DL-HeLa-01_sample.db
 
 graphs:
   - name: signal
