@@ -43,7 +43,7 @@ def convert_array_segmentations_to_cells(labeled_arrays, config, session):
             image_arrays=frame_channel_arrays,
             signal_function=signal_function,
             time_point=time_point,
-            id=counter,
+            counter=counter,
         )
         session.bulk_save_objects(cell_list)
         session.commit()
@@ -102,7 +102,7 @@ def convert_labeled_frame_to_cells(
         cell = CellDB(
             track_id=label,
             t=time_point,
-            id=id,
+            id=counter,
             row=centroid[0],
             col=centroid[1],
             bbox_0=bbox[0],
