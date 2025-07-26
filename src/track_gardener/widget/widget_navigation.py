@@ -1,3 +1,5 @@
+import numpy as np
+from qtpy.QtCore import QTimer
 from qtpy.QtWidgets import (
     QCheckBox,
     QGridLayout,
@@ -11,6 +13,10 @@ from sqlalchemy import and_
 
 from track_gardener.db.db_model import CellDB, TrackDB
 
+DEBOUNCE_INTERVAL_MS = 300
+MAX_QUERY_LIMIT = 200
+MIN_AREA_FOR_LABELS = 500 * 500
+
 
 class TrackNavigationWidget(QWidget):
     def __init__(self, napari_viewer, sql_session):
@@ -20,7 +26,7 @@ class TrackNavigationWidget(QWidget):
         self.viewer = napari_viewer
         self.labels = self.viewer.layers["Labels"]
         self.session = sql_session
-        self.query_lim = 500
+        self.query_lim = MAX_QUERY_LIMIT
 
         # add shortcuts
         self.init_shortcuts()
@@ -40,6 +46,12 @@ class TrackNavigationWidget(QWidget):
         self.follow_object_checkbox.setChecked(True)
 
         self.layout().addWidget(navigation_group)
+
+        # set a timer for different kinds of updates
+        self._full_update_timer = QTimer(self)
+        self._full_update_timer.setSingleShot(True)
+        self._full_update_timer.setInterval(DEBOUNCE_INTERVAL_MS)
+        self._full_update_timer.timeout.connect(self.full_label_update)
 
         # build labels layer
         self.build_labels()
@@ -89,59 +101,138 @@ class TrackNavigationWidget(QWidget):
         Function to build the labels layer based on db content
         """
 
+        # check if the labels are visible at all
         if ("Labels" in self.viewer.layers) and (
             self.viewer.layers["Labels"].visible
         ):
-            current_frame = self.viewer.dims.current_step[0]
 
-            # clear labels
-            self.viewer.layers["Labels"].data[:] = 0
-
-            # get the corner pixels of the viewer - for magnification
+            # check if the zoom is high enough
             corner_pixels = self.labels.corner_pixels
+            r_span = corner_pixels[1, 0] - corner_pixels[0, 0]
+            c_span = corner_pixels[1, 1] - corner_pixels[0, 1]
 
-            r_rad = (corner_pixels[1, 0] - corner_pixels[0, 0]) / 2
-            c_rad = (corner_pixels[1, 1] - corner_pixels[0, 1]) / 2
+            if r_span * c_span < MIN_AREA_FOR_LABELS:
 
-            # get the center position of the viewer
-            r = self.viewer.camera.center[1]
-            c = self.viewer.camera.center[2]
+                if self.labels.selected_label not in [None, 0]:
+                    # Light update immediately (for responsiveness)
+                    self.light_labels_update()
+                else:
+                    self.full_labels_update()
 
-            # calculate labels extent
-            r_start = r - r_rad
-            r_stop = r + r_rad
-            c_start = c - c_rad
-            c_stop = c + c_rad
-
-            # query the database
-            query = (
-                self.session.query(CellDB)
-                .filter(CellDB.t == current_frame)
-                .filter(CellDB.bbox_0 < int(r_stop))
-                .filter(CellDB.bbox_1 < int(c_stop))
-                .filter(CellDB.bbox_2 > int(r_start))
-                .filter(CellDB.bbox_3 > int(c_start))
-                .limit(self.query_lim)
-                .all()
-            )
-
-            if len(query) < self.query_lim:
-                frame = self.viewer.layers["Labels"].data
-
-                for cell in query:
-                    frame[
-                        cell.bbox_0 : cell.bbox_2, cell.bbox_1 : cell.bbox_3
-                    ] += (cell.mask.astype(int) * cell.track_id)
-
-                self.viewer.layers["Labels"].data = frame
-                self.viewer.status = f"Found {len(query)} cells in the field."
-
-                # store the query with the layer
-                self.labels.metadata["query"] = query
+                # Debounce full update: restart timer
+                self._full_update_timer.stop()
+                self._full_update_timer.start()
 
             else:
-                self.viewer.layers["Labels"].refresh()
-                self.viewer.status = f"More than {self.query_lim} in the field - zoom in to display labels."
+                self.viewer.layers["Labels"].data = np.zeros([0], dtype=int)
+                self.viewer.status = "Zoom in to display labels."
+
+    def full_labels_update(self):
+        """
+        Full update
+        """
+
+        # get the current frame
+        current_frame = self.viewer.dims.current_step[0]
+
+        # get the corner pixels of the field of view
+        r_start, r_stop, c_start, c_stop = self.get_view_coordinates()
+
+        # query the database
+        query = (
+            self.session.query(CellDB)
+            .filter(CellDB.t == current_frame)
+            .filter(CellDB.bbox_0 < int(r_stop))
+            .filter(CellDB.bbox_1 < int(c_stop))
+            .filter(CellDB.bbox_2 > int(r_start))
+            .filter(CellDB.bbox_3 > int(c_start))
+            .limit(self.query_lim)
+            .all()
+        )
+
+        if len(query) < self.query_lim:
+
+            # get query extent and position
+            r_start_frame = min([x.bbox_0 for x in query])
+            r_stop_frame = max([x.bbox_2 for x in query])
+            c_start_frame = min([x.bbox_1 for x in query])
+            c_stop_frame = max([x.bbox_3 for x in query])
+
+            # build the frame
+            frame = np.zeros(
+                [r_stop_frame - r_start_frame, c_stop_frame - c_start_frame],
+                dtype=int,
+            )
+
+            for cell in query:
+                frame[
+                    cell.bbox_0 - r_start_frame : cell.bbox_2 - r_start_frame,
+                    cell.bbox_1 - c_start_frame : cell.bbox_3 - c_start_frame,
+                ] += (
+                    cell.mask.astype(int) * cell.track_id
+                )
+
+            self.viewer.layers["Labels"].data = frame
+            self.viewer.layers["Labels"].translate = np.array(
+                [r_start_frame, c_start_frame]
+            )
+            self.viewer.layers["Labels"].refresh()
+
+            # update the status
+            self.viewer.status = f"Found {len(query)} cells in the field."
+
+            # store the query with the layer
+            self.labels.metadata["query"] = query
+
+        else:
+            self.viewer.layers["Labels"].refresh()
+            self.viewer.status = f"More than {self.query_lim} in the field - zoom in to display labels."
+
+    def light_labels_update(self):
+        """
+        Light update
+        """
+
+        # get the current frame
+        current_frame = self.viewer.dims.current_step[0]
+
+        # query the database
+        query = (
+            self.session.query(CellDB)
+            .filter(CellDB.track_id == self.labels.selected_label)
+            .filter(CellDB.t == current_frame)
+            .all()
+        )
+
+        if query is not None:
+            cell = query[0]
+
+        # sent labels data to the labels layer
+        self.viewer.layers["Labels"].data = cell.mask
+        self.viewer.layers["Labels"].translate = np.array(
+            [cell.bbox_0, cell.bbox_1]
+        )
+        self.viewer.layers["Labels"].refresh()
+
+    def get_view_coordinates(self):
+
+        # get the corner pixels of the viewer - for magnification
+        corner_pixels = self.labels.corner_pixels
+
+        r_rad = (corner_pixels[1, 0] - corner_pixels[0, 0]) / 2
+        c_rad = (corner_pixels[1, 1] - corner_pixels[0, 1]) / 2
+
+        # get the center position of the viewer
+        r = self.viewer.camera.center[1]
+        c = self.viewer.camera.center[2]
+
+        # calculate labels extent
+        r_start = r - r_rad
+        r_stop = r + r_rad
+        c_start = c - c_rad
+        c_stop = c + c_rad
+
+        return r_start, r_stop, c_start, c_stop
 
     #########################################################
     # track navigation
