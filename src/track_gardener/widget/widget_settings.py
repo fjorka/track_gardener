@@ -186,18 +186,20 @@ class SettingsWidget(QWidget):
         Function to load data from zarr.
         """
 
-        # try loading if it's a single level
-        try:
-            data = [da.from_zarr(channel_path)]
+        store = zarr.open(channel_path, mode="r")
 
-        except zarr.errors.ContainsGroupError:
+        if isinstance(store, zarr.Group):
 
             # check number of levels
             root_group = zarr.open_group(channel_path, mode="r")
-            levels_list = [key for key in root_group if key.isdigit()]
+            levels_list = sorted([key for key in root_group if key.isdigit()])
             data = []
             for level in levels_list:
                 data.append(da.from_zarr(channel_path, level))
+
+        else:
+
+            data = [da.from_zarr(channel_path)]
 
         return data
 
@@ -223,7 +225,7 @@ class SettingsWidget(QWidget):
             channel_name = ch.get("name", "Unnamed")
             channel_path = ch.get("path", "")
             channel_lut = ch.get("lut", "green")
-            channel_contrast_limits = ch.get("contrast_limits", [0, 4095])
+            channel_contrast_limits = ch.get("contrast_limits", None)
 
             # get data from zarr
             # a list of arrays

@@ -25,9 +25,9 @@ class TrackNavigationWidget(QWidget):
 
         self.viewer = napari_viewer
         self.labels = self.viewer.layers["Labels"]
-        self.labels.selected_label = 0  # default to no selection
         self.session = sql_session
         self.query_lim = MAX_QUERY_LIMIT
+        self.labels.metadata["display"] = False
 
         # set a timer for different kinds of updates
         self._full_update_timer = QTimer(self)
@@ -54,14 +54,14 @@ class TrackNavigationWidget(QWidget):
 
         self.layout().addWidget(navigation_group)
 
-        # build labels layer
-        self.build_labels()
-
         # connect building labels to the viewer
         self.viewer.camera.events.zoom.connect(self.build_labels)
         self.viewer.camera.events.center.connect(self.build_labels)
         self.labels.events.visible.connect(self.build_labels)
         self.viewer.dims.events.current_step.connect(self.build_labels)
+
+        # build labels layer
+        self.build_labels()
 
     #########################################################
     # shortcuts
@@ -72,14 +72,14 @@ class TrackNavigationWidget(QWidget):
         Initialize shortcuts for the widget.
         """
         # add a shortcut for right click selection
-        self.viewer.mouse_drag_callbacks.append(self.select_label)
+        self.labels.mouse_drag_callbacks.append(self.select_label)
 
     def select_label(self, viewer, event):
         """
         Select a label by right click.
         Works on any layer.
         """
-        if event.button == 2:
+        if event.button == 2 and self.labels.metadata["display"]:
 
             # fixed for the eraser behavior
             if self.labels.mode == "erase":
@@ -100,10 +100,14 @@ class TrackNavigationWidget(QWidget):
                 c = int(position[2])
 
             # check which cell was clicked
+            # within the labels layer data
             myTrackNum = self.labels.data[r, c]
 
             # set track as active
             self.labels.selected_label = int(myTrackNum)
+
+            # viewer status
+            self.viewer.status = f"Selected track {self.labels.selected_label} at position {r}, {c}."
 
     #########################################################
     # labels_layer_update
@@ -149,6 +153,8 @@ class TrackNavigationWidget(QWidget):
         current_frame = self.viewer.dims.current_step[0]
 
         # get the corner pixels of the field of view
+        if not self.viewer.layers:
+            return
         corner_pixels = self.viewer.layers[0].corner_pixels
 
         # column shift for getting these as imaging data are 3D
@@ -205,14 +211,19 @@ class TrackNavigationWidget(QWidget):
             # store the query with the layer
             self.labels.metadata["query"] = query
 
+            # update the display status
+            self.labels.metadata["display"] = True
+
         elif len(query) == 0:
             self.labels.data = np.zeros([1, 1], dtype=int)
             self.labels.refresh()
+            self.labels.metadata["display"] = False
             self.viewer.status = "No cells found in the field."
 
         else:
             self.labels.data = np.zeros([1, 1], dtype=int)
             self.labels.refresh()
+            self.labels.metadata["display"] = False
             self.viewer.status = f"More than {self.query_lim} in the field - zoom in to display labels."
 
     def light_labels_update(self):
@@ -237,6 +248,7 @@ class TrackNavigationWidget(QWidget):
             # sent labels data to the labels layer
             self.labels.data = cell.mask.astype(int) * cell.track_id
             self.labels.translate = np.array([cell.bbox_0, cell.bbox_1])
+            self.labels.metadata["display"] = True
         else:
             self.full_labels_update()
 
