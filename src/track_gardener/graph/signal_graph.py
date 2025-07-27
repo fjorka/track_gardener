@@ -90,7 +90,7 @@ class SignalGraph(GraphicsLayoutWidget):
         Get information about the cell from the database.
         """
         # get a label or a persistent label
-        if self.viewer.layers["Labels"].selected_label > 0:
+        if self.labels.selected_label > 0:
             self.active_label = int(self.labels.selected_label)
         else:
             self.active_label = int(self.labels.metadata["persistent_label"])

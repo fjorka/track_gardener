@@ -1,6 +1,7 @@
 import sqlite3
 from pathlib import Path
 
+import dask.array as da
 import numpy as np
 import pytest
 from sqlalchemy import create_engine
@@ -45,6 +46,10 @@ def viewer(make_napari_viewer):
 
     viewer = make_napari_viewer()
     viewer.add_labels(data=np.zeros([6000, 6000], dtype=int))
+    im = da.zeros([250, 10000, 10000], dtype=int)
+    labels = np.zeros([100, 100], dtype=int)
+    viewer.add_image(im, name="image")
+    viewer.add_labels(labels, name="Labels")
 
     yield viewer
 
