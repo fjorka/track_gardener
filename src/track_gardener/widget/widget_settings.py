@@ -246,9 +246,8 @@ class SettingsWidget(QWidget):
             )
 
         # add labels to the viewer
-        empty_labels = np.zeros([data[0].shape[1], data[0].shape[2]]).astype(
-            int
-        )
+        empty_labels = np.zeros([1, 1], dtype=int)
+
         labels_layer = self.viewer.add_labels(
             empty_labels, name="Labels", metadata={"persistent_label": -1}
         )

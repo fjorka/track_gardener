@@ -240,7 +240,7 @@ class ModificationWidget(QWidget):
             )
 
             # trigger family tree update
-            self.viewer.layers["Labels"].selected_label = new_track
+            self.labels.selected_label = new_track
 
         # if clicked by mistake
         else:
@@ -653,8 +653,27 @@ class ModificationWidget(QWidget):
         query = self.labels.metadata["query"]
         query_ids = [cell.track_id for cell in query]
 
+        # put it on the original size array if shifted
+        row_translate = self.labels.translate[0]
+        col_translate = self.labels.translate[1]
+
+        if (row_translate > 0) or (col_translate > 0):
+            full_labels_arr = np.zeros(
+                [
+                    row_translate + self.labels.data.shape[0],
+                    col_translate + self.labels.data.shape[1],
+                ],
+                dtype=int,
+            )
+            full_labels_arr[
+                row_translate : row_translate + self.labels.data.shape[0],
+                col_translate : col_translate + self.labels.data.shape[1],
+            ] = self.labels.data
+        else:
+            full_labels_arr = self.labels.data
+
         # get properties of objects in the fov
-        regionprops_results = regionprops(self.labels.data)
+        regionprops_results = regionprops(full_labels_arr)
 
         for cell_label in regionprops_results:
 
