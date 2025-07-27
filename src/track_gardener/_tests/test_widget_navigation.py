@@ -13,7 +13,7 @@ def test_select_label(qtbot, viewer, db_session):
     track_navigation_widget = TrackNavigationWidget(viewer, db_session)
 
     # position for a cell to test selection
-    viewer.dims.set_point(0, 10)
+    # viewer.dims.set_point(10, 0)
     pos = (10, 5051.0, 4569.0)
     viewer.cursor.position = pos
     # create mock event objects

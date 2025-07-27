@@ -44,7 +44,7 @@ def db_session():
 def viewer(make_napari_viewer):
 
     viewer = make_napari_viewer()
-    viewer.add_labels(data=np.zeros([10000, 10000], dtype=int))
+    viewer.add_labels(data=np.zeros([6000, 6000], dtype=int))
 
     yield viewer
 

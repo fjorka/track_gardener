@@ -109,11 +109,6 @@ class TrackGardener(QWidget):
         # remember general thing
         self.cell_tags = cell_tags
 
-        # add lineage graph
-        fam_plot_widget = FamilyGraphWidget(self.viewer, session)
-        self.viewer.window.add_dock_widget(fam_plot_widget, area="bottom")
-        self.napari_widgets.append(fam_plot_widget)
-
         # add navigation widget
         self.navigation_widget = TrackNavigationWidget(viewer, session)
         self.tab2.layout().addWidget(self.navigation_widget, 0, 0)
@@ -129,8 +124,12 @@ class TrackGardener(QWidget):
         )
         self.tab2.layout().addWidget(self.modification_widget, 1, 0)
 
-        # add graph widgets
+        # add lineage graph
+        fam_plot_widget = FamilyGraphWidget(self.viewer, session)
+        self.viewer.window.add_dock_widget(fam_plot_widget, area="bottom")
+        self.napari_widgets.append(fam_plot_widget)
 
+        # add graph widgets
         for gr in graph_list:
             graph_name = gr.get("name", "Unnamed")
             graph_signals = gr.get("signals", [])
