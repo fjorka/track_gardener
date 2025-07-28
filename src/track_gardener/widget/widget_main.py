@@ -1,3 +1,5 @@
+from contextlib import suppress
+
 import napari
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (
@@ -62,6 +64,23 @@ class TrackGardener(QWidget):
 
         # remove graph widgets
         if len(self.napari_widgets) > 0:
+
+            events_list = [
+                self.viewer.camera.events.zoom,
+                self.viewer.camera.events.center,
+                self.viewer.layers["Labels"].events.visible,
+                self.viewer.dims.events.current_step,
+            ]
+            callbacks_list = [
+                self.navigation_widget.build_labels,
+                self.navigation_widget.center_object_core_function,
+            ]
+
+            for event in events_list:
+                for callback in callbacks_list:
+                    with suppress(TypeError, ValueError):
+                        event.disconnect(callback)
+
             for widget in self.napari_widgets:
                 self.viewer.window.remove_dock_widget(widget)
             self.napari_widgets = []
@@ -70,17 +89,6 @@ class TrackGardener(QWidget):
             if len(self.settings_window.added_widgets) > 1:
                 for widget in self.settings_window.added_widgets[1:]:
                     self.viewer.window.remove_dock_widget(widget)
-
-            # disconnect labels connections
-            self.viewer.camera.events.zoom.disconnect(
-                self.navigation_widget.build_labels
-            )
-            self.viewer.camera.events.center.disconnect(
-                self.navigation_widget.build_labels
-            )
-            self.viewer.layers["Labels"].events.visible.disconnect(
-                self.navigation_widget.build_labels
-            )
 
         # remove widgets from tab2
         if self.navigation_widget is not None:

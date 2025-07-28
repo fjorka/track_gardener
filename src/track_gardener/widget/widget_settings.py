@@ -247,6 +247,9 @@ class SettingsWidget(QWidget):
                 contrast_limits=channel_contrast_limits,
             )
 
+        # ensure reset view
+        self.viewer.reset_view()
+
         # add labels to the viewer
         empty_labels = np.zeros([1, 1], dtype=int)
 
