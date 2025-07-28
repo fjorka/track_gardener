@@ -4,6 +4,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     ForeignKey,
+    Index,
     Integer,
     PickleType,
     String,
@@ -20,30 +21,36 @@ Base = declarative_base()
 
 class CellDB(Base):
     __tablename__ = "cells"
+    __table_args__ = (
+        # Index to optimize spatial (FOV) queries at a given timepoint
+        Index("idx_t_bboxes", "t", "bbox_0", "bbox_1", "bbox_2", "bbox_3"),
+    )
 
+    # Composite primary key for fast and unique (track_id, t) lookups
     track_id = Column(Integer, ForeignKey("tracks.track_id"), primary_key=True)
     t = Column(Integer, primary_key=True)
 
-    id = Column(BigInteger)
+    # Keep id for external reference, but not a PK
+    id = Column(BigInteger, unique=True)
 
     row = Column(Integer)
     col = Column(Integer)
 
-    bbox_0 = Column(Integer, default=NO_SHAPE, primary_key=True)
-    bbox_1 = Column(Integer, default=NO_SHAPE, primary_key=True)
-    bbox_2 = Column(Integer, default=NO_SHAPE, primary_key=True)
-    bbox_3 = Column(Integer, default=NO_SHAPE, primary_key=True)
+    # Bounding box columns for spatial queries
+    bbox_0 = Column(Integer, default=NO_SHAPE, nullable=False)
+    bbox_1 = Column(Integer, default=NO_SHAPE, nullable=False)
+    bbox_2 = Column(Integer, default=NO_SHAPE, nullable=False)
+    bbox_3 = Column(Integer, default=NO_SHAPE, nullable=False)
 
     mask = Column(PickleType, default=NO_SHAPE)
-
-    # JSON column to keep signals
     signals = Column(JSON, default=NO_SIGNAL)
-
-    # JSON column for tags
     tags = Column(JSON, default=NO_SIGNAL)
 
     def __repr__(self):
-        return f"{self.id} from frame {self.t} with track_id {self.track_id} at ({self.row},{self.col})"
+        return (
+            f"{self.id} from frame {self.t} with track_id {self.track_id} "
+            f"at ({self.row},{self.col})"
+        )
 
 
 class TrackDB(Base):

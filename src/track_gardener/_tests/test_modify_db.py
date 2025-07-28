@@ -12,6 +12,7 @@ from track_gardener.db.db_functions import (
     delete_trackDB,
     get_descendants,
     integrate_trackDB,
+    newCell_number,
     newTrack_number,
     remove_CellDB,
     trackDB_after_cellDB,
@@ -47,14 +48,14 @@ def extended_db_session(db_session: Session):
 
 def test_starting_db(extended_db_session):
     """Verify that the test database is set up correctly."""
-    assert extended_db_session.query(TrackDB).filter_by(track_id=37401).one()
+    assert extended_db_session.query(TrackDB).filter_by(track_id=204).one()
 
 
 def test_getting_signals(extended_db_session):
     """
     Test getting the list of signal names from the database.
     """
-    expected_list = ["area", "ch0_nuc", "ch0_cyto", "ch1_nuc", "ch1_cyto"]
+    expected_list = ["area", "ch0_nuc"]
 
     signal_list = fdb.get_signals(extended_db_session)
 
@@ -114,7 +115,7 @@ def test_newTrack_number(extended_db_session):
     """Test - getting a new track number."""
 
     new_track = newTrack_number(extended_db_session)
-    assert new_track == 37404
+    assert new_track == 235
 
     new_track_number = 6e10
     new_track = TrackDB(
@@ -150,11 +151,23 @@ def test_newTrack_number_empty_db(extended_db_session):
     assert new_track == 1, f"Expected 1, got {new_track}"
 
 
+def test_newCell_number(extended_db_session):
+    """Test - getting a new cell number."""
+
+    new_cell_number = 6e10
+    new_cell = CellDB(id=new_cell_number, t=0, track_id=100)
+    extended_db_session.add(new_cell)
+    extended_db_session.commit()
+
+    new_cell = newCell_number(extended_db_session)
+    assert new_cell == new_cell_number + 1
+
+
 def test_get_descendants(extended_db_session):
     """Test checking we get correct descendants."""
 
     # test at the root level
-    active_label = 37401
+    active_label = 227
     descendants = get_descendants(extended_db_session, active_label)
 
     assert len(descendants) == 3
@@ -162,7 +175,7 @@ def test_get_descendants(extended_db_session):
     descendants_list = [x.track_id for x in descendants]
     descendants_list.sort()
     assert descendants[0].track_id == active_label
-    assert descendants_list == [37401, 37402, 37403]
+    assert descendants_list == [227, 233, 234]
 
     # test lower in the tree
     active_label = 3
@@ -179,8 +192,8 @@ def test_get_descendants(extended_db_session):
 def test_cut_trackDB(extended_db_session):
     """Test checking that a track is modified correctly."""
 
-    active_label = 20422
-    current_frame = 5
+    active_label = 225
+    current_frame = 2
 
     new_track_expected = newTrack_number(extended_db_session)
 
@@ -203,14 +216,14 @@ def test_cut_trackDB(extended_db_session):
         .filter_by(track_id=new_track)
         .one()
         .t_begin
-        == 5
+        == current_frame
     )
     assert (
         extended_db_session.query(TrackDB)
         .filter_by(track_id=new_track)
         .one()
         .t_end
-        == 42
+        == 5
     )
     assert (
         extended_db_session.query(TrackDB)
@@ -233,28 +246,28 @@ def test_cut_trackDB(extended_db_session):
         .filter_by(track_id=active_label)
         .one()
         .t_end
-        == 4
+        == current_frame - 1
     )
 
     # assert that the children are modified
     assert (
-        extended_db_session.query(TrackDB).filter_by(track_id=20423).one().root
+        extended_db_session.query(TrackDB).filter_by(track_id=227).one().root
         == new_track
     )
     assert (
         extended_db_session.query(TrackDB)
-        .filter_by(track_id=20423)
+        .filter_by(track_id=227)
         .one()
         .parent_track_id
         == new_track
     )
     assert (
-        extended_db_session.query(TrackDB).filter_by(track_id=20426).one().root
+        extended_db_session.query(TrackDB).filter_by(track_id=228).one().root
         == new_track
     )
     assert (
         extended_db_session.query(TrackDB)
-        .filter_by(track_id=20426)
+        .filter_by(track_id=228)
         .one()
         .parent_track_id
         == new_track
@@ -262,15 +275,15 @@ def test_cut_trackDB(extended_db_session):
 
     # assert that the grandchildren are modified
     assert (
-        extended_db_session.query(TrackDB).filter_by(track_id=20425).one().root
+        extended_db_session.query(TrackDB).filter_by(track_id=230).one().root
         == new_track
     )
     assert (
         extended_db_session.query(TrackDB)
-        .filter_by(track_id=20425)
+        .filter_by(track_id=230)
         .one()
         .parent_track_id
-        == 20423
+        == 228
     )
 
 
@@ -319,7 +332,7 @@ def test_cut_trackDB_mitosis(extended_db_session):
     Test cut_TrackDB function when cutting from mitosis.
     """
 
-    active_label = 37402
+    active_label = 3
 
     record = (
         extended_db_session.query(TrackDB)
@@ -391,8 +404,8 @@ def test_cut_trackDB_mitosis(extended_db_session):
 def test_cut_merge_trackDB(extended_db_session):
     """Test checking that a track is modified correctly."""
 
-    active_label = 20422
-    current_frame = 5
+    active_label = 225
+    current_frame = 2
 
     new_track_expected = newTrack_number(extended_db_session)
 
@@ -405,7 +418,7 @@ def test_cut_merge_trackDB(extended_db_session):
     assert new_track == new_track_expected
 
     # re-merge new to old
-    t1_ind = 20422
+    t1_ind = 225
     t2_ind = new_track
     _ = integrate_trackDB(
         extended_db_session, "merge", t1_ind, t2_ind, current_frame
@@ -434,7 +447,7 @@ def test_cut_merge_trackDB(extended_db_session):
         .filter_by(track_id=t1_ind)
         .one()
         .t_end
-        == 42
+        == 5
     )
     assert (
         extended_db_session.query(TrackDB)
@@ -453,23 +466,23 @@ def test_cut_merge_trackDB(extended_db_session):
 
     # assert that the children are not modified
     assert (
-        extended_db_session.query(TrackDB).filter_by(track_id=20423).one().root
+        extended_db_session.query(TrackDB).filter_by(track_id=227).one().root
         == t1_ind
     )
     assert (
         extended_db_session.query(TrackDB)
-        .filter_by(track_id=20423)
+        .filter_by(track_id=227)
         .one()
         .parent_track_id
         == t1_ind
     )
     assert (
-        extended_db_session.query(TrackDB).filter_by(track_id=20426).one().root
+        extended_db_session.query(TrackDB).filter_by(track_id=228).one().root
         == t1_ind
     )
     assert (
         extended_db_session.query(TrackDB)
-        .filter_by(track_id=20426)
+        .filter_by(track_id=228)
         .one()
         .parent_track_id
         == t1_ind
@@ -477,15 +490,15 @@ def test_cut_merge_trackDB(extended_db_session):
 
     # assert that the grandchildren are not modified
     assert (
-        extended_db_session.query(TrackDB).filter_by(track_id=20425).one().root
+        extended_db_session.query(TrackDB).filter_by(track_id=230).one().root
         == t1_ind
     )
     assert (
         extended_db_session.query(TrackDB)
-        .filter_by(track_id=20425)
+        .filter_by(track_id=230)
         .one()
         .parent_track_id
-        == 20423
+        == 228
     )
 
 
@@ -513,7 +526,7 @@ def test_cellsDB_after_trackDB_nonsense_call(extended_db_session):
 def test_cellsDB_after_trackDB(extended_db_session):
     """Test modifications in the cells table after a track is moodified."""
 
-    active_label = 20422
+    active_label = 228
 
     # check how long the track is before the cut
     org_stop = (
@@ -523,7 +536,14 @@ def test_cellsDB_after_trackDB(extended_db_session):
         .t_end
     )
 
-    current_frame = 3
+    org_start = (
+        extended_db_session.query(TrackDB)
+        .filter_by(track_id=active_label)
+        .one()
+        .t_begin
+    )
+
+    current_frame = 9
     new_track = 100
 
     _ = cellsDB_after_trackDB(
@@ -541,7 +561,7 @@ def test_cellsDB_after_trackDB(extended_db_session):
             .filter_by(track_id=active_label)
             .all()
         )
-        == current_frame
+        == current_frame - org_start
     )
 
     # assert that there is expected number of objects in new track
@@ -553,7 +573,7 @@ def test_cellsDB_after_trackDB(extended_db_session):
 def test_modify_track_cellsDB_before(extended_db_session):
     """Test checking whether the cellsDB_after_trackDB - in before direction."""
 
-    active_label = 20422
+    active_label = 228
 
     # check how long the track is before the cut
     org_stop = (
@@ -563,7 +583,14 @@ def test_modify_track_cellsDB_before(extended_db_session):
         .t_end
     )
 
-    current_frame = 5
+    org_start = (
+        extended_db_session.query(TrackDB)
+        .filter_by(track_id=active_label)
+        .one()
+        .t_begin
+    )
+
+    current_frame = 8
     new_track = 100
 
     _ = cellsDB_after_trackDB(
@@ -588,7 +615,7 @@ def test_modify_track_cellsDB_before(extended_db_session):
             .filter_by(track_id=new_track)
             .all()
         )
-        == current_frame
+        == current_frame - org_start
     )
 
 
@@ -652,9 +679,9 @@ def test_freely_floating_merge(extended_db_session):
 def test_double_cut_merge(extended_db_session):
     """Test merging tracks when both need to be cut."""
 
-    t1_ind = 37401
-    t2_ind = 20422
-    current_frame = 30
+    t1_ind = 234
+    t2_ind = 208
+    current_frame = 42
 
     expected_new_track = newTrack_number(extended_db_session)
 
@@ -729,11 +756,16 @@ def test_double_cut_merge(extended_db_session):
 
 
 def test_after_t1_end_track_merge(extended_db_session):
-    """ """
+    """
+    Track 1 - ended before the cutting frame
+    Track 2 - running at the cutting frame
+    T2 after should get id of T1. T1 offspring become roots.
+    T2 before should just be shorter.
+    """
 
-    t1_ind = 37401
-    t2_ind = 20422
-    current_frame = 40
+    t1_ind = 204
+    t2_ind = 228
+    current_frame = 10
 
     expected_new_track = newTrack_number(extended_db_session)
 
@@ -819,8 +851,8 @@ def test_before_t2_start_track_merge(extended_db_session):
     """Test checking if a freely floating track can be merged.
     No descendants on neither side."""
 
-    t1_ind = 20422
-    t2_ind = 37401
+    t1_ind = 227
+    t2_ind = 211
     current_frame = 20
 
     expected_new_track = newTrack_number(extended_db_session)
@@ -970,12 +1002,8 @@ def test_freely_floating_connect(extended_db_session):
     assert t1_after is None
     assert t2_before is None
 
-
-def test_double_cut_connect(extended_db_session):
-    """Test merging tracks when both need to be cut."""
-
-    t1_ind = 37401
-    t2_ind = 20422
+    t1_ind = 207
+    t2_ind = 227
     current_frame = 30
 
     expected_t1_after = newTrack_number(extended_db_session)
@@ -1064,7 +1092,7 @@ def test_trackDB_after_cellDB_no_change(extended_db_session):
     Tests if the modification happened at a time frame inside of a track
     """
 
-    t1_ind = 20422
+    t1_ind = 227
     current_frame = 10
 
     t1_org = (
@@ -1137,9 +1165,9 @@ def test_trackDB_after_cellDB_added_after(extended_db_session):
     Tests a modification that extends the track.
     """
 
-    t1_ind = 20422
-    current_frame = 50
-    d1_ind = 20426
+    t1_ind = 204
+    current_frame = 10
+    d1_ind = 220
 
     t1_org = (
         extended_db_session.query(TrackDB).filter_by(track_id=t1_ind).one()
@@ -1175,6 +1203,7 @@ def test_trackDB_after_cellDB_added_after(extended_db_session):
     cell_dict = {
         "label": t1_ind,
         "area": 0,
+        "centroid": [0, 0],
         "bbox": [0, 0, 0, 0],
         "image": np.zeros([2, 2]),
     }
@@ -1206,7 +1235,7 @@ def test_trackDB_after_cellDB_added_after(extended_db_session):
 
 def test_remove_CellDB(extended_db_session):
     """Test - remove a cell"""
-    cell_id = 20422
+    cell_id = 220
     current_frame = 20
 
     remove_CellDB(extended_db_session, cell_id, current_frame)
@@ -1221,9 +1250,10 @@ def test_remove_CellDB(extended_db_session):
 
 
 def test_remove_CellDB_first(extended_db_session):
-    """Test - remove a cell"""
-    cell_id = 20426
-    current_frame = 43
+    """Test - remove a cell
+    Removing the first cell after mitosis breaks parent-child relationship."""
+    cell_id = 220
+    current_frame = 3
 
     remove_CellDB(extended_db_session, cell_id, current_frame)
 
@@ -1246,7 +1276,7 @@ def test_remove_cell_cut_track(extended_db_session):
     Test after encountering a bug of cutting a cell at a next position after removed cell.
     """
 
-    active_label = 20422
+    active_label = 207
     current_frame = 20
 
     remove_CellDB(extended_db_session, active_label, current_frame)
@@ -1305,7 +1335,7 @@ def test_add_retrieve_track_note(extended_db_session):
     Test adding and retrieving a note for a track.
     """
 
-    active_label = 20422
+    active_label = 208
     note = "This is a note. No kidding."
 
     sts = fdb.save_track_note(extended_db_session, active_label, note)
@@ -1325,7 +1355,7 @@ def test_add_tags(extended_db_session):
     Test adding and retrieving a note for a track.
     """
 
-    active_cell = 20422
+    active_cell = 207
     frame = 20
     annotation = "apoptosis"
 

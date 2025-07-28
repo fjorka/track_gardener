@@ -1,6 +1,7 @@
 import sqlite3
 from pathlib import Path
 
+import dask.array as da
 import numpy as np
 import pytest
 from sqlalchemy import create_engine
@@ -13,7 +14,9 @@ def db_session():
     Create an exact in-memory copy of the SQLite database for testing.
     """
     # Path to the original database
-    test_db_path = Path(__file__).parent / "fixtures" / "db_2tables_test.db"
+    test_db_path = (
+        Path(__file__).parent / "fixtures" / "TrackGardener_example.db"
+    )
 
     # Open connections to the original and in-memory databases
     original_connection = sqlite3.connect(test_db_path)
@@ -44,7 +47,9 @@ def db_session():
 def viewer(make_napari_viewer):
 
     viewer = make_napari_viewer()
-    viewer.add_labels(data=np.zeros([10000, 10000], dtype=int))
+    im = da.zeros([45, 150, 160], dtype=int)
+    viewer.add_image(im, name="image")
+    viewer.add_labels(np.zeros([1, 1], dtype=int), name="Labels")
 
     yield viewer
 

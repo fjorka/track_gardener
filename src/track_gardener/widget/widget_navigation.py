@@ -1,3 +1,5 @@
+import numpy as np
+from qtpy.QtCore import QTimer
 from qtpy.QtWidgets import (
     QCheckBox,
     QGridLayout,
@@ -11,6 +13,10 @@ from sqlalchemy import and_
 
 from track_gardener.db.db_model import CellDB, TrackDB
 
+DEBOUNCE_INTERVAL_MS = 150
+MAX_QUERY_LIMIT = 500
+MIN_AREA_FOR_LABELS = 1000 * 2000
+
 
 class TrackNavigationWidget(QWidget):
     def __init__(self, napari_viewer, sql_session):
@@ -20,7 +26,14 @@ class TrackNavigationWidget(QWidget):
         self.viewer = napari_viewer
         self.labels = self.viewer.layers["Labels"]
         self.session = sql_session
-        self.query_lim = 500
+        self.query_lim = MAX_QUERY_LIMIT
+        self.labels.metadata["display"] = False
+
+        # set a timer for different kinds of updates
+        self._full_update_timer = QTimer(self)
+        self._full_update_timer.setSingleShot(True)
+        self._full_update_timer.setInterval(DEBOUNCE_INTERVAL_MS)
+        self._full_update_timer.timeout.connect(self.full_labels_update)
 
         # add shortcuts
         self.init_shortcuts()
@@ -41,13 +54,14 @@ class TrackNavigationWidget(QWidget):
 
         self.layout().addWidget(navigation_group)
 
-        # build labels layer
-        self.build_labels()
-
         # connect building labels to the viewer
         self.viewer.camera.events.zoom.connect(self.build_labels)
         self.viewer.camera.events.center.connect(self.build_labels)
         self.labels.events.visible.connect(self.build_labels)
+        self.viewer.dims.events.current_step.connect(self.build_labels)
+
+        # build labels layer
+        self.build_labels()
 
     #########################################################
     # shortcuts
@@ -58,27 +72,42 @@ class TrackNavigationWidget(QWidget):
         Initialize shortcuts for the widget.
         """
         # add a shortcut for right click selection
-        self.viewer.mouse_drag_callbacks.append(self.select_label)
+        self.labels.mouse_drag_callbacks.append(self.select_label)
 
     def select_label(self, viewer, event):
         """
         Select a label by right click.
         Works on any layer.
         """
-        if event.button == 2:
+        if event.button == 2 and self.labels.metadata["display"]:
 
             # fixed for the eraser behavior
-            if viewer.layers["Labels"].mode == "erase":
-                viewer.layers["Labels"].mode = "pan_zoom"
+            if self.labels.mode == "erase":
+                self.labels.mode = "pan_zoom"
 
             # look up cursor position
             position = tuple([int(x) for x in self.viewer.cursor.position])
 
+            # move if labels use translation
+            row_translate = self.labels.translate[0]
+            col_translate = self.labels.translate[1]
+
+            if (row_translate > 0) or (col_translate > 0):
+                r = int(position[1] - row_translate)
+                c = int(position[2] - col_translate)
+            else:
+                r = int(position[1])
+                c = int(position[2])
+
             # check which cell was clicked
-            myTrackNum = self.labels.data[position[1], position[2]]
+            # within the labels layer data
+            myTrackNum = self.labels.data[r, c]
 
             # set track as active
             self.labels.selected_label = int(myTrackNum)
+
+            # viewer status
+            self.viewer.status = f"Selected track {self.labels.selected_label} at position {r}, {c}."
 
     #########################################################
     # labels_layer_update
@@ -89,59 +118,141 @@ class TrackNavigationWidget(QWidget):
         Function to build the labels layer based on db content
         """
 
-        if ("Labels" in self.viewer.layers) and (
-            self.viewer.layers["Labels"].visible
-        ):
-            current_frame = self.viewer.dims.current_step[0]
+        # check if the labels are visible at all
+        if ("Labels" in self.viewer.layers) and (self.labels.visible):
 
-            # clear labels
-            self.viewer.layers["Labels"].data[:] = 0
+            # check if the zoom is high enough
+            # assuming that data prodiding world coordinates were loaded first
+            corner_pixels = self.viewer.layers[0].corner_pixels
+            r_span = corner_pixels[1, 1] - corner_pixels[0, 1]
+            c_span = corner_pixels[1, 2] - corner_pixels[0, 2]
 
-            # get the corner pixels of the viewer - for magnification
-            corner_pixels = self.labels.corner_pixels
+            if r_span * c_span < MIN_AREA_FOR_LABELS:
 
-            r_rad = (corner_pixels[1, 0] - corner_pixels[0, 0]) / 2
-            c_rad = (corner_pixels[1, 1] - corner_pixels[0, 1]) / 2
+                if self.labels.selected_label != 0:
+                    # Light update immediately (for responsiveness)
+                    self.light_labels_update()
 
-            # get the center position of the viewer
-            r = self.viewer.camera.center[1]
-            c = self.viewer.camera.center[2]
+                    # Debounce full update: restart timer
+                    self._full_update_timer.stop()
+                    self._full_update_timer.start()
 
-            # calculate labels extent
-            r_start = r - r_rad
-            r_stop = r + r_rad
-            c_start = c - c_rad
-            c_stop = c + c_rad
-
-            # query the database
-            query = (
-                self.session.query(CellDB)
-                .filter(CellDB.t == current_frame)
-                .filter(CellDB.bbox_0 < int(r_stop))
-                .filter(CellDB.bbox_1 < int(c_stop))
-                .filter(CellDB.bbox_2 > int(r_start))
-                .filter(CellDB.bbox_3 > int(c_start))
-                .limit(self.query_lim)
-                .all()
-            )
-
-            if len(query) < self.query_lim:
-                frame = self.viewer.layers["Labels"].data
-
-                for cell in query:
-                    frame[
-                        cell.bbox_0 : cell.bbox_2, cell.bbox_1 : cell.bbox_3
-                    ] += (cell.mask.astype(int) * cell.track_id)
-
-                self.viewer.layers["Labels"].data = frame
-                self.viewer.status = f"Found {len(query)} cells in the field."
-
-                # store the query with the layer
-                self.labels.metadata["query"] = query
+                else:
+                    self.full_labels_update()
 
             else:
-                self.viewer.layers["Labels"].refresh()
-                self.viewer.status = f"More than {self.query_lim} in the field - zoom in to display labels."
+                self.labels.data = np.zeros([1, 1], dtype=int)
+                self.viewer.status = "Zoom in to display labels."
+
+    def full_labels_update(self):
+        """
+        Full update
+        """
+
+        # get the current frame
+        current_frame = self.viewer.dims.current_step[0]
+
+        # get the corner pixels of the field of view
+        if not self.viewer.layers:
+            return
+        corner_pixels = self.viewer.layers[0].corner_pixels
+
+        # column shift for getting these as imaging data are 3D
+        r_start = int(corner_pixels[0, 1])
+        r_stop = int(corner_pixels[1, 1])
+        c_start = int(corner_pixels[0, 2])
+        c_stop = int(corner_pixels[1, 2])
+
+        # self.viewer.status = f"Current view: {r_start}:{r_stop}, {c_start}:{c_stop} at frame {current_frame}"
+
+        # query the database
+        query = (
+            self.session.query(CellDB)
+            .filter(CellDB.t == current_frame)
+            .filter(CellDB.bbox_0 < r_stop)
+            .filter(CellDB.bbox_1 < c_stop)
+            .filter(CellDB.bbox_2 > r_start)
+            .filter(CellDB.bbox_3 > c_start)
+            .limit(self.query_lim)
+            .all()
+        )
+
+        self.viewer.status = f"Querying cells in the field: {len(query)} with view {r_start}:{r_stop}, {c_start}:{c_stop} at frame {current_frame}"
+
+        if (len(query) < self.query_lim) and (len(query) > 0):
+
+            # get query extent and position
+            r_start_frame = min([x.bbox_0 for x in query])
+            r_stop_frame = max([x.bbox_2 for x in query])
+            c_start_frame = min([x.bbox_1 for x in query])
+            c_stop_frame = max([x.bbox_3 for x in query])
+
+            # build the frame
+            frame = np.zeros(
+                [r_stop_frame - r_start_frame, c_stop_frame - c_start_frame],
+                dtype=int,
+            )
+
+            for cell in query:
+                frame[
+                    cell.bbox_0 - r_start_frame : cell.bbox_2 - r_start_frame,
+                    cell.bbox_1 - c_start_frame : cell.bbox_3 - c_start_frame,
+                ] += (
+                    cell.mask.astype(int) * cell.track_id
+                )
+
+            self.labels.data = frame
+            self.labels.translate = np.array([r_start_frame, c_start_frame])
+            self.labels.refresh()
+
+            # update the status
+            self.viewer.status = f"Found {len(query)} cells in the field."
+
+            # store the query with the layer
+            self.labels.metadata["query"] = query
+
+            # update the display status
+            self.labels.metadata["display"] = True
+
+        elif len(query) == 0:
+            self.labels.data = np.zeros([1, 1], dtype=int)
+            self.labels.refresh()
+            self.labels.metadata["display"] = False
+            self.viewer.status = "No cells found in the field."
+
+        else:
+            self.labels.data = np.zeros([1, 1], dtype=int)
+            self.labels.refresh()
+            self.labels.metadata["display"] = False
+            self.viewer.status = f"More than {self.query_lim} in the field - zoom in to display labels."
+
+    def light_labels_update(self):
+        """
+        Light update
+        """
+
+        # get the current frame
+        current_frame = self.viewer.dims.current_step[0]
+
+        # query the database
+        query = (
+            self.session.query(CellDB)
+            .filter(CellDB.track_id == self.labels.selected_label)
+            .filter(CellDB.t == current_frame)
+            .all()
+        )
+
+        if len(query) == 1:
+            cell = query[0]
+
+            # sent labels data to the labels layer
+            self.labels.data = cell.mask.astype(int) * cell.track_id
+            self.labels.translate = np.array([cell.bbox_0, cell.bbox_1])
+            self.labels.metadata["display"] = True
+        else:
+            self.full_labels_update()
+
+        self.labels.refresh()
 
     #########################################################
     # track navigation

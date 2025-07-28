@@ -1,8 +1,8 @@
 import os
-from math import sqrt
 from typing import List, Sequence
 
 import dask.array as da
+import networkx as nx
 import numpy as np
 from loguru import logger
 from skimage.measure import regionprops
@@ -122,7 +122,7 @@ def convert_labeled_frame_to_cells(
 def build_trackdb_from_celldb(
     track_id_seq: Sequence[int], t_seq: Sequence[int]
 ) -> List[TrackDB]:
-    """Builds TrackDB objects from track_id and t sequences using efficient NumPy operations.
+    """Builds TrackDB objects from track_id and t sequences.
 
     Args:
         track_id_seq: Sequence of track IDs (ints).
@@ -160,90 +160,64 @@ def build_trackdb_from_celldb(
     return tracks
 
 
-def assign_parent_offspring_relationships(db_path, parent_radius=20):
-    """
-    Assign parent-offspring relationships in an existing database based on spatial proximity.
-    Only considers tracks that ended at time t-1 as valid parents.
+def assign_tracks_relationships(db_path, parent_radius=20):
 
-    Parameters:
-    - db_path: Path to the SQLite database file.
-    - parent_radius: Max Euclidean distance to accept as a parent.
-    """
-    logger.info("Connecting to database at {}", db_path)
     engine = create_engine(f"sqlite:///{db_path}")
     Session = sessionmaker(bind=engine)
     session = Session()
 
-    candidate_children = (
-        session.query(TrackDB)
-        .filter(TrackDB.t_begin > 0, TrackDB.parent_track_id == NO_PARENT)
-        .all()
-    )
-    logger.info("Found {} candidate offspring tracks", len(candidate_children))
+    tracks = {t.track_id: t for t in session.query(TrackDB).all()}
 
-    for child in candidate_children:
-        t_start = child.t_begin
+    # Pre-load cell positions: {(track_id, t): (row, col)}
+    cell_positions = {}
+    for c in session.query(CellDB).all():
+        cell_positions[(c.track_id, c.t)] = (c.row, c.col)
 
-        # Find first cell of the child
-        child_cell = (
-            session.query(CellDB)
-            .filter_by(track_id=child.track_id, t=t_start)
-            .first()
-        )
-        if not child_cell:
-            logger.warning(
-                "No cell for track {} at t={}", child.track_id, t_start
-            )
+    G = nx.DiGraph()
+    for t in tracks.values():
+        G.add_node(t.track_id)
+
+    # Assign parent relationships
+    for child in tracks.values():
+        if child.t_begin == 0 or child.parent_track_id != NO_PARENT:
             continue
 
-        # Find candidate parent tracks that end exactly at t_start - 1
-        valid_parents = (
-            session.query(TrackDB).filter(TrackDB.t_end == t_start - 1).all()
-        )
+        t_start = child.t_begin
+        child_pos = cell_positions.get((child.track_id, t_start))
 
-        # Get their last cells (at t_start - 1)
-        parent_cells = (
-            session.query(CellDB)
-            .filter(CellDB.t == t_start - 1)
-            .filter(CellDB.track_id.in_([p.track_id for p in valid_parents]))
-            .all()
-        )
+        # Find possible parents (tracks that end at t_start - 1)
+        possible_parents = [
+            t for t in tracks.values() if t.t_end == t_start - 1
+        ]
 
-        best_dist = float("inf")
-        best_parent_track = None
+        # Get parent cells at t_start - 1
+        best_parent, best_dist = None, float("inf")
+        for p in possible_parents:
+            parent_pos = cell_positions.get((p.track_id, t_start - 1))
+            if parent_pos:
+                dist = (
+                    (child_pos[0] - parent_pos[0]) ** 2
+                    + (child_pos[1] - parent_pos[1]) ** 2
+                ) ** 0.5
+                if dist < parent_radius and dist < best_dist:
+                    best_dist, best_parent = dist, p
 
-        for pc in parent_cells:
-            dist = sqrt(
-                (child_cell.row - pc.row) ** 2 + (child_cell.col - pc.col) ** 2
-            )
-            if dist < parent_radius and dist < best_dist:
-                best_dist = dist
-                best_parent_track = pc.track_id
+        if best_parent:
+            child.parent_track_id = best_parent.track_id
+            G.add_edge(best_parent.track_id, child.track_id)
 
-        if best_parent_track is not None:
-            parent_track = (
-                session.query(TrackDB)
-                .filter_by(track_id=best_parent_track)
-                .first()
-            )
-            child.parent_track_id = parent_track.track_id
-            child.root = (
-                parent_track.root
-                if parent_track.root != NO_PARENT
-                else parent_track.track_id
-            )
-            logger.debug(
-                "Assigned parent {} to child {} (dist={:.2f})",
-                parent_track.track_id,
-                child.track_id,
-                best_dist,
-            )
-        else:
-            logger.debug(
-                "No parent found within radius for child track {}",
-                child.track_id,
-            )
+    # Now assign roots: For each weakly connected component (lineage)
+    for component in nx.weakly_connected_components(G):
+        subgraph = G.subgraph(component)
+        roots = [n for n in subgraph.nodes if subgraph.in_degree(n) == 0]
+        if len(roots) != 1:
+            continue  # Or handle error
+        root_id = roots[0]
 
+        # Traverse down and set root for all descendants
+        for node in nx.descendants(subgraph, root_id) | {root_id}:
+            tracks[node].root = root_id
+
+    # Commit all changes
     session.commit()
     session.close()
-    logger.success("Parent-offspring assignment complete.")

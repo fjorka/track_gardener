@@ -1,0 +1,36 @@
+experiment_settings:
+  experiment_name: Fluo-N2DL-HeLa-01_sample
+  description: Config file showing how to use Track Gardener with a sample dataset.
+
+signal_channels:
+  - name: ch0
+    path: ..\..\Fluo-N2DL-HeLa-01_images.zarr\images
+    lut: gray
+
+cell_measurements:
+  - function: area
+    source: regionprops
+  - function: intensity_mean
+    name: nuc
+    source: regionprops
+    channels:
+      - ch0
+
+database:
+  path: Fluo-N2DL-HeLa-01_conversion_result.db
+
+graphs:
+  - name: signal
+    signals:
+      - ch0_nuc
+    colors:
+      - green
+  - name: area
+    signals:
+      - area
+    colors:
+      - white
+
+cell_tags:
+  modified: x
+  mitosis: m
