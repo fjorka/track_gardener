@@ -62,7 +62,9 @@ def test_check_orphan_cells(session, add_tracks_cells):
     session.commit()
     errors = check_orphan_cells(session)
     assert errors
-    assert "Orphaned cells found" in errors[0]
+    assert (
+        "Orphaned cells found" in errors[0]
+    ), f"Expected orphaned cells error, got: {errors[0]}"
 
 
 def test_check_orphan_cells_none(session, add_tracks_cells):
@@ -71,9 +73,12 @@ def test_check_orphan_cells_none(session, add_tracks_cells):
 
 
 def test_check_unused_tracks(session, add_tracks_cells):
-    # Remove cell for t3 so t3 has no cells
+    """
+    Fixture provides a track without cells.
+    """
+
     errors = check_unused_tracks(session)
-    assert any("Tracks with no associated cells" in e for e in errors)
+    assert errors == ["Tracks with no associated cells: [Track 3 from 0 to 3]"]
 
 
 def test_check_unused_tracks_none(session):

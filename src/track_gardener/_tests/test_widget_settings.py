@@ -46,7 +46,7 @@ def test_experiment_loading(viewer, mocker):
     set_widget.labels_settings = {}
 
     mock_load_zarr = mocker.patch(
-        "track_gardener.widget.widget_settings.da.from_zarr"
+        "track_gardener.widget.widget_settings.SettingsWidget.load_zarr"
     )
     mock_load_zarr.return_value = np.zeros((1, 10, 10))
 

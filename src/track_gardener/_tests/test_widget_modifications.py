@@ -4,6 +4,7 @@ from qtpy.QtCore import Qt
 from qtpy.QtTest import QTest
 from qtpy.QtWidgets import QDialog, QPushButton
 
+from track_gardener.db.db_functions import newTrack_number
 from track_gardener.widget.widget_modifications import ModificationWidget
 
 
@@ -15,7 +16,7 @@ def test_select_label_to_t_boxes(viewer, db_session):
     modification_widget = ModificationWidget(viewer, db_session)
 
     # position for a cell to test selection
-    first_label = 20422
+    first_label = 204
     modification_widget.labels.selected_label = first_label
 
     assert (
@@ -23,7 +24,7 @@ def test_select_label_to_t_boxes(viewer, db_session):
         == modification_widget.labels.selected_label
     ), f"Expected active label to be {modification_widget.selected_label}, instead {modification_widget.T2_box.value()}."
 
-    modification_widget.labels.selected_label = 20423
+    modification_widget.labels.selected_label = 211
     assert (
         modification_widget.T2_box.value()
         == modification_widget.labels.selected_label
@@ -57,11 +58,13 @@ def test_adding_new_track(qtbot, viewer, db_session):
 
     modification_widget = ModificationWidget(viewer, db_session)
 
+    new_track_id = newTrack_number(db_session)
+
     modification_widget.new_track_function()
 
     assert (
-        modification_widget.labels.selected_label == 37404
-    ), f"Expected selected label to be 37404, instead it is {modification_widget.labels.selected_label}."
+        modification_widget.labels.selected_label == new_track_id
+    ), f"Expected selected label to be {new_track_id}, instead it is {modification_widget.labels.selected_label}."
 
 
 def test_cut_cell_function(qtbot, viewer, db_session):
@@ -71,17 +74,21 @@ def test_cut_cell_function(qtbot, viewer, db_session):
     Database modifications are tested separately.
     """
 
+    track_id = 207
+    current_track = 20
+    new_track_id = newTrack_number(db_session)
+
     modification_widget = ModificationWidget(viewer, db_session)
 
-    modification_widget.labels.selected_label = 20422
-    viewer.dims.set_point(0, 20)
+    modification_widget.labels.selected_label = track_id
+    viewer.dims.set_point(0, current_track)
 
     modification_widget.cut_track_function()
 
     # check that the new selected label is a new track
     assert (
-        modification_widget.labels.selected_label == 37404
-    ), f"Expected selected track to be a new track - 37404, instead it is {modification_widget.labels.selected_label}."
+        modification_widget.labels.selected_label == new_track_id
+    ), f"Expected selected track to be a new track - {new_track_id}, instead it is {modification_widget.labels.selected_label}."
 
 
 def test_cut_cell_function_mistake_click(qtbot, viewer, db_session):
@@ -93,9 +100,9 @@ def test_cut_cell_function_mistake_click(qtbot, viewer, db_session):
 
     modification_widget = ModificationWidget(viewer, db_session)
 
-    sel_label = 20422
+    sel_label = 207
     modification_widget.labels.selected_label = sel_label
-    viewer.dims.set_point(0, 60)
+    viewer.dims.set_point(0, 40)
 
     modification_widget.cut_track_function()
 
@@ -114,15 +121,17 @@ def test_cut_cell_function_mitosis(qtbot, viewer, db_session):
 
     modification_widget = ModificationWidget(viewer, db_session)
 
-    starting_track = 37402
+    starting_track = 207
+    current_frame = 3  # first frame of the track from mitosis
+
     modification_widget.labels.selected_label = starting_track
-    viewer.dims.set_point(0, 35)
+    viewer.dims.set_point(0, current_frame)
 
     modification_widget.cut_track_function()
 
     # check that the new selected label is a new track
     assert (
-        modification_widget.labels.selected_label == 37402
+        modification_widget.labels.selected_label == starting_track
     ), f"Expected selected track to be {starting_track}, instead it is {modification_widget.labels.selected_label}."
 
 
@@ -135,7 +144,7 @@ def test_del_cell_function(qtbot, viewer, db_session):
 
     modification_widget = ModificationWidget(viewer, db_session)
 
-    starting_track = 37402
+    starting_track = 207
     modification_widget.labels.selected_label = starting_track
 
     modification_widget.del_track_function()
@@ -155,7 +164,7 @@ def test_del_cell_function_no_cell(qtbot, viewer, db_session):
 
     modification_widget = ModificationWidget(viewer, db_session)
 
-    starting_track = 37402
+    starting_track = 207
     modification_widget.labels.selected_label = starting_track
     no_track = 333
     modification_widget.labels.selected_label = no_track
@@ -181,9 +190,9 @@ def test_merge_cell_function(qtbot, viewer, db_session):
 
     modification_widget = ModificationWidget(viewer, db_session)
 
-    previous_track = 37402
-    active_track = 20428
-    viewer.dims.set_point(0, 130)
+    previous_track = 227
+    active_track = 220
+    viewer.dims.set_point(0, 30)
 
     # populate T1 and T2 spinboxes by selection
     modification_widget.labels.selected_label = previous_track
@@ -207,9 +216,9 @@ def test_merge_cell_function_too_early(qtbot, viewer, db_session):
 
     modification_widget = ModificationWidget(viewer, db_session)
 
-    previous_track = 20428
-    active_track = 37402
-    viewer.dims.set_point(0, 70)
+    previous_track = 231
+    active_track = 227
+    viewer.dims.set_point(0, 30)
 
     # populate T1 and T2 spinboxes by selection
     modification_widget.labels.selected_label = previous_track
@@ -231,11 +240,13 @@ def test_merge_cell_function_same_cell(qtbot, viewer, db_session):
     Database modifications are tested separately.
     """
 
-    modification_widget = ModificationWidget(viewer, db_session)
-    modification_widget.T2_box.setValue(37402)
-    modification_widget.T1_box.setValue(37402)
+    track_id = 227
 
-    viewer.dims.set_point(0, 130)
+    modification_widget = ModificationWidget(viewer, db_session)
+    modification_widget.T2_box.setValue(track_id)
+    modification_widget.T1_box.setValue(track_id)
+
+    viewer.dims.set_point(0, 30)
 
     # merge tracks
     modification_widget.merge_track_function()
@@ -255,9 +266,9 @@ def test_connect_cell_function(qtbot, viewer, db_session):
 
     modification_widget = ModificationWidget(viewer, db_session)
 
-    previous_track = 37402
-    active_track = 20428
-    viewer.dims.set_point(0, 130)
+    previous_track = 207
+    active_track = 227
+    viewer.dims.set_point(0, 30)
 
     # populate T1 and T2 spinboxes by selection
     modification_widget.labels.selected_label = previous_track
@@ -282,9 +293,8 @@ def test_connect_cell_function_clean(viewer, db_session, mocker):
 
     modification_widget = ModificationWidget(viewer, db_session)
 
-    previous_track = 37402
-    active_track = 20425
-    viewer.dims.set_point(0, 207)
+    previous_track = 220
+    active_track = 233
 
     # populate T1 and T2 spinboxes by selection
     modification_widget.labels.selected_label = previous_track
@@ -311,9 +321,9 @@ def test_connect_cell_function_clean_call_db(viewer, db_session, mocker):
 
     modification_widget = ModificationWidget(viewer, db_session)
 
-    previous_track = 37402
-    active_track = 20425
-    viewer.dims.set_point(0, 207)
+    previous_track = 207
+    active_track = 233
+    viewer.dims.set_point(0, 42)
 
     # populate T1 and T2 spinboxes by selection
     modification_widget.labels.selected_label = previous_track
@@ -340,11 +350,10 @@ def test_connect_cell_function_same_cell(qtbot, viewer, db_session):
     Database modifications are tested separately.
     """
 
+    track_id = 207
     modification_widget = ModificationWidget(viewer, db_session)
-    modification_widget.T2_box.setValue(37402)
-    modification_widget.T1_box.setValue(37402)
-
-    viewer.dims.set_point(0, 130)
+    modification_widget.T2_box.setValue(track_id)
+    modification_widget.T1_box.setValue(track_id)
 
     # merge tracks
     modification_widget.connect_track_function()
@@ -364,9 +373,9 @@ def test_connect_cell_function_too_early(qtbot, viewer, db_session):
 
     modification_widget = ModificationWidget(viewer, db_session)
 
-    previous_track = 20428
-    active_track = 37402
-    viewer.dims.set_point(0, 70)
+    previous_track = 233
+    active_track = 207
+    viewer.dims.set_point(0, 25)
 
     # populate T1 and T2 spinboxes by selection
     modification_widget.labels.selected_label = previous_track
@@ -433,7 +442,7 @@ def test_save_note(viewer, db_session):
     modification_widget.text_edit = mock_event
     mock_dialog = MagicMock()
     modification_widget.dialog = mock_dialog
-    active_label = 20422
+    active_label = 207
     modification_widget.labels.selected_label = active_label
 
     # Call the method
@@ -457,7 +466,7 @@ def test_mod_cell_function_deletion(viewer, db_session, mocker):
     modification_widget = ModificationWidget(viewer, db_session)
 
     # labels are not really build unless navigation widget is built
-    cell_id = "20422"
+    cell_id = "204"
     viewer.dims.set_point(0, 0)
 
     mock_cell = MagicMock()
@@ -571,7 +580,7 @@ def test_tags_call_annotation(viewer, db_session, mocker):
     tag_widget = modification_widget.add_note_tag_buttons()
 
     viewer.dims.set_point(0, 0)
-    modification_widget.labels.selected_label = 20422
+    modification_widget.labels.selected_label = 204
 
     mock_func_db = mocker.patch(
         "track_gardener.widget.widget_modifications.fdb.tag_cell"

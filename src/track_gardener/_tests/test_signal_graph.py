@@ -87,7 +87,7 @@ def test_ploting_cell(viewer, db_session):
         color_list=["red"],
     )
 
-    viewer.layers["Labels"].selected_label = 37401
+    viewer.layers["Labels"].selected_label = 204
 
     assert (
         signal_graph.query is not None
@@ -128,7 +128,7 @@ def test_using_tags(viewer, db_session):
         tag_dictionary={"apoptosis": "A"},
     )
 
-    active_cell = 37401
+    active_cell = 207
     frame = 30
     annotation = "apoptosis"
 

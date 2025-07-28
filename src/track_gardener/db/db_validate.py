@@ -41,7 +41,7 @@ def check_orphan_cells(session):
         session.execute(
             select(CellDB)
             .outerjoin(TrackDB, CellDB.track_id == TrackDB.track_id)
-            .where(TrackDB.track_id is None)
+            .where(TrackDB.track_id.is_(None))
         )
         .scalars()
         .all()
@@ -57,13 +57,13 @@ def check_unused_tracks(session):
         session.execute(
             select(TrackDB)
             .outerjoin(CellDB, TrackDB.track_id == CellDB.track_id)
-            .where(CellDB.track_id is None)
+            .where(CellDB.track_id.is_(None))
         )
         .scalars()
         .all()
     )
     if unused:
-        return [f"Tracks with no associated cells: {len(unused)}"]
+        return [f"Tracks with no associated cells: {unused}"]
     return []
 
 
