@@ -3,7 +3,7 @@ from copy import deepcopy
 import dask.array as da
 import numpy as np
 from skimage.morphology import binary_dilation, disk
-from sqlalchemy import and_
+from sqlalchemy import and_, func
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -19,16 +19,23 @@ def newTrack_number(session):
         - in the future consider getting first unused if fast enough
     """
 
-    query = (
-        session.query(TrackDB.track_id)
-        .order_by(TrackDB.track_id.desc())
-        .first()
-    )
+    max_id = session.query(func.max(TrackDB.track_id)).scalar() or 0
 
-    if query is None:
-        return 1
+    return max_id + 1
 
-    return query[0] + 1
+
+def newCell_number(session):
+    """
+    input:
+        - session
+    output:
+        - number of the new cell
+        - in the future consider getting first unused if fast enough
+    """
+
+    max_id = session.query(func.max(CellDB.id)).scalar() or 0
+
+    return max_id + 1
 
 
 def get_signals(session):
@@ -496,7 +503,10 @@ def add_new_core_CellDB(session, current_frame, cell):
     """
 
     # start the object
-    cell_db = CellDB(id=cell.label, t=current_frame, track_id=cell.label)
+
+    # new object starts with a new id because id enforces uniqueness
+    new_id = newCell_number(session)
+    cell_db = CellDB(id=new_id, t=current_frame, track_id=cell.label)
 
     cell_db.row = int(cell.centroid[0])
     cell_db.col = int(cell.centroid[1])
