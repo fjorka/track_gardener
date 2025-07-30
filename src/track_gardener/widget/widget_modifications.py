@@ -340,6 +340,8 @@ class ModificationWidget(QWidget):
 
         ################################################################################################
         # check if the request is possible
+
+        # check that the tracks are not the same
         if t1 == t2:
             self.viewer.status = "Error - cannot merge a track with itself."
             return
@@ -654,8 +656,8 @@ class ModificationWidget(QWidget):
         query_ids = [cell.track_id for cell in query]
 
         # put it on the original size array if shifted
-        row_translate = self.labels.translate[0]
-        col_translate = self.labels.translate[1]
+        row_translate = int(self.labels.translate[0])
+        col_translate = int(self.labels.translate[1])
 
         if (row_translate > 0) or (col_translate > 0):
             full_labels_arr = np.zeros(

@@ -4,7 +4,10 @@ import napari
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (
     QGridLayout,
+    QScrollArea,
+    QSizePolicy,
     QTabWidget,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -48,10 +51,8 @@ class TrackGardener(QWidget):
 
         # 2nd tab (initially empty)
         self.tab2 = QWidget()
-        self.tab2.setLayout(QGridLayout())
-        self.tab2.layout().setAlignment(Qt.AlignTop)
+        self.tab2.setLayout(QVBoxLayout())
         self.tab2.layout().setContentsMargins(0, 0, 0, 0)
-        self.tab2.setMinimumWidth(500)
         self.tabwidget.addTab(self.tab2, "interact")
 
         # add tab widget to the layout
@@ -114,12 +115,21 @@ class TrackGardener(QWidget):
         Callback to create widgets in the second tab.
         """
 
-        # remember general thing
-        self.cell_tags = cell_tags
+        # Create the scroll area that will fill the entire tab
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # add navigation widget
+        # Create a separate widget to hold ALL of your content
+        content_widget = QWidget()
+        content_widget.setLayout(QGridLayout())
+        content_widget.layout().setContentsMargins(0, 0, 0, 0)
+        content_widget.layout().setAlignment(Qt.AlignTop)
+        content_widget.layout().setSpacing(0)
+
+        # Add navigation widget to the content layout
         self.navigation_widget = TrackNavigationWidget(viewer, session)
-        self.tab2.layout().addWidget(self.navigation_widget, 0, 0)
+        content_widget.layout().addWidget(self.navigation_widget, 0, 0)
 
         # add modification widget
         self.modification_widget = ModificationWidget(
@@ -130,7 +140,16 @@ class TrackGardener(QWidget):
             tag_dictionary=cell_tags,
             signal_function=signal_function,
         )
-        self.tab2.layout().addWidget(self.modification_widget, 1, 0)
+        self.modification_widget.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+        )
+        content_widget.layout().addWidget(self.modification_widget, 1, 0)
+
+        # Set the content widget as the scroll area's main widget
+        scroll_area.setWidget(content_widget)
+
+        # Add the single scroll_area to tab2 layout
+        self.tab2.layout().addWidget(scroll_area, 1)
 
         # add lineage graph
         fam_plot_widget = FamilyGraphWidget(self.viewer, session)
@@ -150,8 +169,7 @@ class TrackGardener(QWidget):
                 color_sel_list=graph_colors,
                 tag_dictionary=cell_tags,
             )
-            # self.tab2.layout().addWidget(graph_widget, ind, 0)
-            # ind += 1
+
             self.viewer.window.add_dock_widget(
                 graph_widget, area="bottom", name=graph_name
             )
