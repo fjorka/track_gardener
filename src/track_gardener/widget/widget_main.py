@@ -1,4 +1,5 @@
 from contextlib import suppress
+from typing import TYPE_CHECKING
 
 import napari
 from qtpy.QtCore import Qt
@@ -17,15 +18,27 @@ from track_gardener.widget.widget_modifications import ModificationWidget
 from track_gardener.widget.widget_navigation import TrackNavigationWidget
 from track_gardener.widget.widget_settings import SettingsWidget
 
+if TYPE_CHECKING:
+    from typing import Any, Callable, Dict, List, Optional
+
+    from sqlalchemy.orm import Session
+
 
 class TrackGardener(QWidget):
+    """
+    A napari widget for viewing and curating tracking data.
 
-    def __init__(self, viewer: napari.Viewer = None):
+    This widget provides a tabbed interface for setting up a tracking session
+    and interacting with the data through various sub-widgets.
+    """
+
+    def __init__(self, viewer: Optional[napari.Viewer] = None) -> None:
         """
-        Parameters
-        ----------
-        viewer : Viewer
-            The Napari viewer instance
+        Initializes the TrackGardener widget.
+
+        Args:
+            viewer (Optional[napari.Viewer]): The napari viewer instance. If None,
+                the current viewer is retrieved using napari.current_viewer().
         """
 
         super().__init__()
@@ -60,7 +73,12 @@ class TrackGardener(QWidget):
 
     def clear_widgets(self):
         """
-        Remove all widgets from the second tab.
+        Removes all interactive widgets and disconnects event callbacks.
+
+        This method cleans up the 'interact' tab and removes any dock widgets
+        that were created during the session, effectively resetting the UI to
+        its initial state. It also disconnects napari event listeners to
+        prevent errors from lingering callbacks.
         """
 
         # remove graph widgets
@@ -102,17 +120,29 @@ class TrackGardener(QWidget):
 
     def create_widgets(
         self,
-        viewer,
-        session,
-        ch_list,
-        ch_names,
-        signal_list,
-        graph_list,
-        cell_tags,
-        signal_function,
-    ):
+        viewer: napari.Viewer,
+        session: Session,
+        ch_list: List[Any],
+        ch_names: List[str],
+        signal_list: List[Any],
+        graph_list: List[Dict[str, Any]],
+        cell_tags: Dict[Any, Any],
+        signal_function: Callable,
+    ) -> None:
         """
-        Callback to create widgets in the second tab.
+        Creates and populates the interactive widgets in the 'interact' tab.
+
+        Args:
+            viewer (napari.Viewer): The napari viewer instance.
+            session (Session): The SQLAlchemy session object for database interaction.
+            ch_list (List[Any]): List of channels.
+            ch_names (List[str]): Names corresponding to the channels.
+            signal_list (List[Any]): List of available signals for plotting.
+            graph_list (List[Dict[str, Any]]): A list of dictionaries, where each
+                dictionary defines a graph to be plotted, including its name,
+                signals, and colors.
+            cell_tags (Dict[Any, Any]): Dictionary of cell tags.
+            signal_function (Callable): A function used for signal-related operations.
         """
 
         # Create the scroll area that will fill the entire tab

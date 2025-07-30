@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
 from qtpy.QtGui import QIcon
@@ -19,17 +20,52 @@ from skimage.measure import regionprops
 
 import track_gardener.db.db_functions as fdb
 
+if TYPE_CHECKING:
+    from napari.viewer import Viewer
+    from sqlalchemy.orm import Session
+
 
 class ModificationWidget(QWidget):
+    """
+    A widget for modifying tracks, cells, notes, and tags.
+
+    This widget provides UI elements and functions to merge, cut, delete,
+    and connect tracks, as well as add notes and tags to individual cells.
+    It interacts directly with the napari viewer and a SQLAlchemy database
+    session to persist changes.
+
+    Attributes:
+        viewer (Viewer): The napari viewer instance.
+        labels (Labels): The napari labels layer for segmentation masks.
+        session (Session): The SQLAlchemy session for database interaction.
+        ch_list (Optional[list[Any]]): List of channel data.
+        ch_names (Optional[list[str]]): Names of the channels.
+        signal_function (Optional[Callable]): A function to calculate signals.
+        tag_dictionary (dict[str, Any]): A dictionary of available tags.
+    """
+
     def __init__(
         self,
-        napari_viewer,
-        sql_session,
-        ch_list=None,
-        ch_names=None,
-        tag_dictionary=None,
-        signal_function=None,
-    ):
+        napari_viewer: Viewer,
+        sql_session: Session,
+        ch_list: Optional[list[Any]] = None,
+        ch_names: Optional[list[str]] = None,
+        tag_dictionary: Optional[dict[str, Any]] = None,
+        signal_function: Optional[Callable] = None,
+    ) -> None:
+        """
+        Initializes the ModificationWidget.
+
+        Args:
+            napari_viewer (Viewer): The napari viewer instance.
+            sql_session (Session): The SQLAlchemy session for database operations.
+            ch_list (Optional[List[Any]]): List of channel data. Defaults to None.
+            ch_names (Optional[List[str]]): List of channel names. Defaults to None.
+            tag_dictionary (Optional[Dict[str, Any]]): Dictionary mapping tags to
+                shortcuts or other metadata. Defaults to None.
+            signal_function (Optional[Callable]): Function to calculate signals from
+                cell properties. Defaults to None.
+        """
         super().__init__()
         self.setLayout(QVBoxLayout())
 
@@ -61,7 +97,6 @@ class ModificationWidget(QWidget):
         self.layout().addWidget(spacer_00)
 
         # add notes and tagging
-
         self.note_tag_widget = self.add_note_tag_buttons()
 
         tag_group = QGroupBox()
@@ -93,9 +128,15 @@ class ModificationWidget(QWidget):
     # track modification
     ################################################################################################
 
-    def add_track_modification_control(self):
+    def add_track_modification_control(self) -> QWidget:
         """
-        Add a set of buttons to modify tracks
+        Creates and returns the track modification panel widget.
+
+        This panel contains spinboxes for selecting tracks and buttons for
+        merging, connecting, cutting, and deleting tracks.
+
+        Returns:
+            QWidget: The track modification control panel.
         """
 
         modification_panel = QWidget()
@@ -148,9 +189,15 @@ class ModificationWidget(QWidget):
 
         return modification_panel
 
-    def add_T_spinbox(self, value):
+    def add_T_spinbox(self, value: int) -> QSpinBox:
         """
-        Add a spinbox for track selection
+        Creates a spinbox for track ID selection.
+
+        Args:
+            value (int): The initial value for the spinbox.
+
+        Returns:
+            QSpinBox: The configured spinbox widget.
         """
         T_box = QSpinBox()
         T_box.setMinimum(0)
@@ -159,9 +206,14 @@ class ModificationWidget(QWidget):
 
         return T_box
 
-    def T_function(self, event):
+    def T_function(self, event: Optional[Any] = None) -> None:
         """
-        Change the values of T1 and T2 spinboxes.
+        Updates T1 and T2 spinbox values when the selected label changes.
+
+        The previous value of the 'active' T2 box is moved to the 'previous' T1 box.
+
+        Args:
+            event (Optional[Any]): The event signal, not directly used.
         """
         if self.labels.selected_label > 0:
             prev_tr = self.T2_box.value()
@@ -172,17 +224,17 @@ class ModificationWidget(QWidget):
                 self.labels.selected_label
             )
 
-    def T2_change_function(self):
-        """
-        Change the value of the active label.
-        """
+    def T2_change_function(self) -> None:
+        """Updates the selected label in the viewer to match the T2 spinbox."""
         self.labels.selected_label = self.T2_box.value()
 
     ################################################################################################
     ################################################################################################
-    def add_cut_track_btn(self):
-        """
-        Add a button to cut tracks.
+    def add_cut_track_btn(self) -> QPushButton:
+        """Creates the 'Cut track' button.
+
+        Returns:
+            QPushButton: The configured 'Cut track' button.
         """
         cut_track_btn = QPushButton("Cut track")
 
@@ -201,10 +253,8 @@ class ModificationWidget(QWidget):
 
         return cut_track_btn
 
-    def cut_track_function(self):
-        """
-        Function that performs all the changes after a track is cut.
-        """
+    def cut_track_function(self) -> None:
+        """Cuts the active track at the current frame."""
 
         ############################################################################################
         # orient yourself - figure what is asked for
@@ -252,9 +302,11 @@ class ModificationWidget(QWidget):
 
     ################################################################################################
     ################################################################################################
-    def add_del_track_btn(self):
-        """
-        Add a button to cut tracks.
+    def add_del_track_btn(self) -> QPushButton:
+        """Creates the 'Delete track' button.
+
+        Returns:
+            QPushButton: The configured 'Delete track' button.
         """
         del_track_btn = QPushButton("Delete track")
 
@@ -273,10 +325,8 @@ class ModificationWidget(QWidget):
 
         return del_track_btn
 
-    def del_track_function(self):
-        """
-        Function that performs all the changes after a track is deleted
-        """
+    def del_track_function(self) -> None:
+        """Deletes the entire active track from the database."""
 
         ############################################################################################
         # orient yourself - figure what is asked for
@@ -306,9 +356,11 @@ class ModificationWidget(QWidget):
 
     ################################################################################################
     ################################################################################################
-    def add_merge_track_btn(self):
-        """
-        Add a button to merge two tracks.
+    def add_merge_track_btn(self) -> QPushButton:
+        """Creates the 'Merge track' button.
+
+        Returns:
+            QPushButton: The configured 'Merge track' button.
         """
         merge_track_btn = QPushButton("M")
 
@@ -327,11 +379,8 @@ class ModificationWidget(QWidget):
 
         return merge_track_btn
 
-    def merge_track_function(self):
-        """
-        Function that performs all the changes after a track is merged.
-        Track T2 is merged to track T1.
-        """
+    def merge_track_function(self) -> None:
+        """Merges the active track (T2) into the previous track (T1)."""
 
         curr_fr = self.viewer.dims.current_step[0]
 
@@ -382,9 +431,11 @@ class ModificationWidget(QWidget):
 
     ################################################################################################
     ################################################################################################
-    def add_connect_track_btn(self):
-        """
-        Add a button to connect two tracks.
+    def add_connect_track_btn(self) -> QPushButton:
+        """Creates the 'Connect track' button.
+
+        Returns:
+            QPushButton: The configured 'Connect track' button.
         """
         connect_track_btn = QPushButton("C")
 
@@ -405,11 +456,8 @@ class ModificationWidget(QWidget):
 
         return connect_track_btn
 
-    def connect_track_function(self):
-        """
-        Function that performs all the changes after a track is connected.
-        Track
-        """
+    def connect_track_function(self) -> None:
+        """Connects the active track (T2) as a daughter of the previous track (T1)."""
 
         # get the position in time
         curr_fr = self.viewer.dims.current_step[0]
@@ -473,9 +521,11 @@ class ModificationWidget(QWidget):
 
     ################################################################################################
     ################################################################################################
-    def add_new_track_btn(self):
-        """
-        Add a button to connect two tracks.
+    def add_new_track_btn(self) -> QPushButton:
+        """Creates the 'New track' button.
+
+        Returns:
+            QPushButton: The configured 'New track' button.
         """
         new_track_btn = QPushButton("N")
 
@@ -494,11 +544,8 @@ class ModificationWidget(QWidget):
 
         return new_track_btn
 
-    def new_track_function(self):
-        """
-        Function that performs all the changes after a track is connected.
-        Track
-        """
+    def new_track_function(self) -> None:
+        """Gets a new unique track ID and sets it as the selected label."""
 
         new_track = fdb.newTrack_number(self.session)
         self.labels.selected_label = new_track
@@ -507,8 +554,12 @@ class ModificationWidget(QWidget):
 
     ################################################################################################
     ################################################################################################
-    def add_note_tag_buttons(self):
+    def add_note_tag_buttons(self) -> QWidget:
+        """Creates a widget with buttons for adding notes and tags.
 
+        Returns:
+            QWidget: The widget containing note and tag buttons.
+        """
         tagWidget = QWidget()
         tagWidget.setLayout(QHBoxLayout())
 
@@ -535,7 +586,8 @@ class ModificationWidget(QWidget):
 
         return tagWidget
 
-    def save_note(self):
+    def save_note(self) -> None:
+        """Saves the text from the note dialog to the database."""
 
         # collect current note
         self.current_note = self.text_edit.toPlainText()
@@ -553,10 +605,8 @@ class ModificationWidget(QWidget):
 
         self.viewer.status = sts
 
-    def add_note_function(self):
-        """
-        Function to handle addition of a note to the track.
-        """
+    def add_note_function(self) -> None:
+        """Opens a dialog to add or edit a note for the selected track."""
 
         self.dialog = QDialog()
         self.text_edit = QTextEdit()
@@ -570,10 +620,9 @@ class ModificationWidget(QWidget):
         save_button.clicked.connect(self.save_note)
         self.dialog.exec_()
 
-    def update_note_and_icon(self):
-        """
-        Function to update current note and button icon according to the selected label.
-        """
+    def update_note_and_icon(self) -> None:
+        """Updates the current note from the DB and sets the note button icon."""
+
         active_label = int(self.labels.selected_label)
         self.current_note = fdb.get_track_note(self.session, active_label)
 
@@ -593,10 +642,9 @@ class ModificationWidget(QWidget):
         self.note_btn.setIcon(icon)
         self.note_btn.setText(None)
 
-    def add_tag_shortcuts(self):
-        """
-        Add shortcuts for tags.
-        """
+    def add_tag_shortcuts(self) -> None:
+        """Binds keyboard shortcuts for applying tags."""
+
         for tag, sh_cut in self.tag_dictionary.items():
             if tag != "modified":
                 self.viewer.bind_key(
@@ -607,9 +655,14 @@ class ModificationWidget(QWidget):
                     overwrite=True,
                 )
 
-    def handleTagButtonClick(self, viewer=None, annotation=None):
-        """
-        Add a tag to the current cell.
+    def handleTagButtonClick(
+        self, viewer: Optional[Viewer] = None, annotation: Optional[str] = None
+    ) -> None:
+        """Applies a tag to the currently selected cell at the current frame.
+
+        Args:
+            viewer (Optional[Viewer]): The napari viewer instance (from keybinding).
+            annotation (Optional[str]): The tag to apply.
         """
 
         active_cell = self.labels.selected_label
@@ -627,9 +680,11 @@ class ModificationWidget(QWidget):
 
     ################################################################################################
     ################################################################################################
-    def add_mod_cell_btn(self):
-        """
-        Add a button to trigger storing cell in the database.
+    def add_mod_cell_btn(self) -> QPushButton:
+        """Creates the 'Save Cell' button.
+
+        Returns:
+            QPushButton: The configured 'Save Cell' button.
         """
         mod_cell_btn = QPushButton("Save Cell (Add/Modify/Delete)")
 
@@ -642,9 +697,13 @@ class ModificationWidget(QWidget):
 
         return mod_cell_btn
 
-    def mod_cell_function(self, viewer=None):
-        """
-        Fov modifications into a database.
+    def mod_cell_function(self, viewer: Optional[Viewer] = None) -> None:
+        """Saves cell modifications (add, modify, delete) to the database.
+
+        Compares the current labels in the FOV with the database state and saves any changes.
+
+        Args:
+            viewer (Optional[Viewer]): The napari viewer instance (from keybinding).
         """
 
         current_frame = self.viewer.dims.current_step[0]
