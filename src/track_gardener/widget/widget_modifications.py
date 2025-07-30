@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 from qtpy.QtGui import QIcon
@@ -46,12 +46,12 @@ class ModificationWidget(QWidget):
 
     def __init__(
         self,
-        napari_viewer: Viewer,
-        sql_session: Session,
-        ch_list: Optional[list[Any]] = None,
-        ch_names: Optional[list[str]] = None,
-        tag_dictionary: Optional[dict[str, Any]] = None,
-        signal_function: Optional[Callable] = None,
+        napari_viewer: "Viewer",
+        sql_session: "Session",
+        ch_list: list[Any] | None = None,
+        ch_names: list[str] | None = None,
+        tag_dictionary: dict[str, Any] | None = None,
+        signal_function: Callable | None = None,
     ) -> None:
         """
         Initializes the ModificationWidget.
@@ -206,7 +206,7 @@ class ModificationWidget(QWidget):
 
         return T_box
 
-    def T_function(self, event: Optional[Any] = None) -> None:
+    def T_function(self, event: Any | None = None) -> None:
         """
         Updates T1 and T2 spinbox values when the selected label changes.
 
@@ -578,7 +578,7 @@ class ModificationWidget(QWidget):
             if tag != "modified":
                 button = QPushButton(tag)
                 button.clicked.connect(
-                    lambda _, b=button: self.handleTagButtonClick(
+                    lambda _, b=button: self.handle_tag_button_click(
                         annotation=b.text()
                     )
                 )
@@ -649,19 +649,16 @@ class ModificationWidget(QWidget):
             if tag != "modified":
                 self.viewer.bind_key(
                     f"Shift+{sh_cut}",
-                    lambda viewer, annotation=tag: self.handleTagButtonClick(
+                    lambda viewer, annotation=tag: self.handle_tag_button_click(
                         viewer, annotation=annotation
                     ),
                     overwrite=True,
                 )
 
-    def handleTagButtonClick(
-        self, viewer: Optional[Viewer] = None, annotation: Optional[str] = None
-    ) -> None:
+    def handle_tag_button_click(self, annotation: str | None = None) -> None:
         """Applies a tag to the currently selected cell at the current frame.
 
         Args:
-            viewer (Optional[Viewer]): The napari viewer instance (from keybinding).
             annotation (Optional[str]): The tag to apply.
         """
 
@@ -697,7 +694,7 @@ class ModificationWidget(QWidget):
 
         return mod_cell_btn
 
-    def mod_cell_function(self, viewer: Optional[Viewer] = None) -> None:
+    def mod_cell_function(self) -> None:
         """Saves cell modifications (add, modify, delete) to the database.
 
         Compares the current labels in the FOV with the database state and saves any changes.

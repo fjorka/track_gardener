@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import TYPE_CHECKING, Callable
 
 import dask.array as da
 import napari
@@ -25,13 +26,36 @@ from track_gardener.db.config_functions import (
     create_calculate_signals_function,
     validateConfigFile,
 )
-from track_gardener.widget.signal_graph_widget import CellGraphWidget
+from track_gardener.widget.widget_graph_signal import CellGraphWidget
+
+if TYPE_CHECKING:
+    from napari.viewer import Viewer
 
 
 class SettingsWidget(QWidget):
+    """A widget for loading and managing tracking experiment settings.
+
+    This widget provides the UI for loading a YAML configuration file, which
+    defines the experiment data, database path, and visualization settings.
+    It handles loading data into napari and triggering the creation of
+    other interactive widgets.
+    """
+
     def __init__(
-        self, viewer, create_widgets_callback=None, clear_widgets_callback=None
-    ):
+        self,
+        viewer: "Viewer",
+        create_widgets_callback: Callable | None = None,
+        clear_widgets_callback: Callable | None = None,
+    ) -> None:
+        """Initializes the SettingsWidget.
+
+        Args:
+            viewer (Viewer): The napari viewer instance.
+            create_widgets_callback (Optional[Callable]): Callback to create
+                the tracking widgets. Defaults to None.
+            clear_widgets_callback (Optional[Callable]): Callback to clear
+                the tracking widgets. Defaults to None.
+        """
 
         super().__init__()
 
@@ -42,26 +66,28 @@ class SettingsWidget(QWidget):
 
         self.setStyleSheet(napari.qt.get_stylesheet(theme_id="dark"))
 
-        self.mWidget = self.mainWidget()
+        self.mWidget = self.create_main_widget()
         self.mWidget.layout().setAlignment(Qt.AlignTop)
 
         self.setLayout(QVBoxLayout())
         self.layout().setAlignment(Qt.AlignTop)
         self.layout().addWidget(self.mWidget)
 
-    def mainWidget(self):
-        """
-        widget of a widget
+    def create_main_widget(self) -> QWidget:
+        """Creates the main container widget for the settings tab.
+
+        Returns:
+            QWidget: The main widget containing the logo and load button.
         """
 
         widget = QWidget()
         widget.setLayout(QGridLayout())
         widget.layout().setAlignment(Qt.AlignTop)
 
-        self.logo_widget = self.createLogoWidget()
+        self.logo_widget = self.create_logo_widget()
 
         btn_load = QtWidgets.QPushButton("Load Tracking")
-        btn_load.clicked.connect(self.openFileDialog)
+        btn_load.clicked.connect(self.open_file_dialog)
 
         widget.layout().addWidget(self.logo_widget, 0, 0)
         widget.layout().addWidget(btn_load, 1, 0)
@@ -70,9 +96,11 @@ class SettingsWidget(QWidget):
 
         return widget
 
-    def createLogoWidget(self):
-        """
-        Creates a logo widget
+    def create_logo_widget(self) -> QWidget:
+        """Creates a widget to display the TrackGardener logo.
+
+        Returns:
+            QWidget: A widget containing the centered logo image.
         """
 
         # get logo image
@@ -103,7 +131,9 @@ class SettingsWidget(QWidget):
 
         return widget
 
-    def openFileDialog(self):
+    def open_file_dialog(self) -> None:
+        """Opens a file dialog to select and load a YAML configuration file."""
+
         options = QtWidgets.QFileDialog.Options()
         fileName, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
@@ -123,19 +153,17 @@ class SettingsWidget(QWidget):
                 self.viewer.status = "Config file is correct."
 
                 # load config content
-                self.loadConfigFile(fileName)
+                self.load_config_file(fileName)
 
-                self.reorganizeWidgets()
+                self.reorganize_widgets()
             else:
                 # display a window with the error message
                 msgBox = QtWidgets.QMessageBox(self.viewer.window._qt_window)
                 msgBox.setText(msg)
                 msgBox.exec()
 
-    def reorganizeWidgets(self):
-        """
-        reorganize widgets
-        """
+    def reorganize_widgets(self) -> None:
+        """Clears old widgets and loads the new experiment and tracking data."""
 
         # clear main widgets
         if self.clear_widgets_callback is not None:
@@ -148,8 +176,8 @@ class SettingsWidget(QWidget):
 
         self.added_widgets = []
 
-        self.loadExperiment()
-        self.loadTracking()
+        self.load_experiment()
+        self.load_tracking()
 
         # display load widgets button
         pb = QPushButton("Add graph")
@@ -158,9 +186,11 @@ class SettingsWidget(QWidget):
         self.mWidget.layout().addWidget(pb, self.widget_line, 0)
         self.widget_line += 1
 
-    def loadConfigFile(self, filePath):
-        """
-        Put the content of the yaml file into internal variables.
+    def load_config_file(self, filePath: str) -> None:
+        """Parses the YAML configuration file and stores its contents.
+
+        Args:
+            filePath (str): The path to the YAML configuration file.
         """
 
         with open(filePath) as file:
@@ -181,9 +211,16 @@ class SettingsWidget(QWidget):
 
             self.signal_function = create_calculate_signals_function(config)
 
-    def load_zarr(self, channel_path):
-        """
-        Function to load data from zarr.
+    def load_zarr(self, channel_path: str) -> list[da.Array]:
+        """Loads data from a zarr store.
+
+        Handles both single-scale and multi-scale zarr arrays.
+
+        Args:
+            channel_path (str): The path to the zarr store.
+
+        Returns:
+            list[da.Array]: A list of dask arrays, one for each resolution level.
         """
 
         store = zarr.open(channel_path, mode="r")
@@ -203,10 +240,8 @@ class SettingsWidget(QWidget):
 
         return data
 
-    def loadExperiment(self):
-        """
-        loads napari layers
-        """
+    def load_experiment(self) -> None:
+        """Loads experiment data (images, labels) into the napari viewer."""
 
         # remove all previous layers
 
@@ -264,10 +299,8 @@ class SettingsWidget(QWidget):
         # set viewer status
         self.viewer.status = "Experiment loaded"
 
-    def loadTracking(self):
-        """
-        load the widgets
-        """
+    def load_tracking(self) -> None:
+        """Establishes the database connection and creates tracking widgets."""
 
         # establish connection to the database
         engine = create_engine(f"sqlite:///{self.database_path}")
@@ -292,7 +325,8 @@ class SettingsWidget(QWidget):
 
         self.viewer.status = "Tracking loaded"
 
-    def add_new_graph_widget(self):
+    def add_new_graph_widget(self) -> None:
+        """Creates a new CellGraphWidget and adds it to the viewer."""
 
         graph_widget = CellGraphWidget(
             self.viewer,

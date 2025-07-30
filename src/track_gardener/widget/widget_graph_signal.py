@@ -1,7 +1,10 @@
+from typing import TYPE_CHECKING, Any
+
 from qtpy.QtWidgets import (
     QColorDialog,
     QComboBox,
     QHBoxLayout,
+    QLayout,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -9,17 +12,42 @@ from qtpy.QtWidgets import (
 
 from track_gardener.graph.signal_graph import SignalGraph
 
+if TYPE_CHECKING:
+    from napari.viewer import Viewer
+    from sqlalchemy.orm import Session
+
 
 class CellGraphWidget(QWidget):
+    """A widget for creating and managing a signal graph plot.
+
+    This widget allows users to dynamically add, remove, and configure
+    signals to be plotted over time for a selected track. Each signal can
+    be assigned a color, and the graph updates automatically based on
+    user selections.
+    """
+
     def __init__(
         self,
-        napari_viewer,
-        sql_session,
-        signal_list,
-        signal_sel_list=None,
-        color_sel_list=None,
-        tag_dictionary=None,
-    ):
+        napari_viewer: "Viewer",
+        sql_session: "Session",
+        signal_list: list[str],
+        signal_sel_list: list[str] | None = None,
+        color_sel_list: list[str] | None = None,
+        tag_dictionary: dict[str, Any] | None = None,
+    ) -> None:
+        """Initializes the CellGraphWidget.
+
+        Args:
+            napari_viewer (Viewer): The napari viewer instance.
+            sql_session (Session): The SQLAlchemy session for database operations.
+            signal_list (list[str]): A list of all available signal names.
+            signal_sel_list (Optional[list[str]]): A list of signals to pre-select
+                for plotting. Defaults to None.
+            color_sel_list (Optional[list[str]]): A list of colors corresponding
+                to the pre-selected signals. Defaults to None.
+            tag_dictionary (Optional[dict[str, Any]]): A dictionary of cell tags.
+                Defaults to None.
+        """
         super().__init__()
 
         if tag_dictionary is None:
@@ -51,10 +79,10 @@ class CellGraphWidget(QWidget):
 
         # add matching buttons
         if (self.signal_sel_list is None) or (len(self.signal_sel_list) == 0):
-            self.addRowButton()
+            self.add_row_button()
         else:
             for ind in range(len(self.signal_sel_list)):
-                self.addRowButton(
+                self.add_row_button(
                     button=None,
                     signal=self.signal_sel_list[ind],
                     color=self.color_sel_list[ind],
@@ -63,24 +91,38 @@ class CellGraphWidget(QWidget):
             # trigger graph update
             self.graph.update_graph_all()
 
-    def addRowButton(self, button=None, signal=None, color=None):
+    def add_row_button(
+        self,
+        button: QPushButton | None = None,
+        signal: str | None = None,
+        color: str | None = None,
+    ) -> None:
+        """Adds a new row of controls for selecting a signal and color.
 
+        Args:
+            button (Optional[QPushButton]): The button that triggered the action,
+                used to determine insertion position. Defaults to None.
+            signal (Optional[str]): The signal to pre-select in the new row.
+                Defaults to None.
+            color (Optional[str]): The color to pre-select for the new row.
+                Defaults to None.
+        """
         # Create a new row
         rowLayout = QHBoxLayout()
 
-        comboBox = self.createSignalComboBox(signal)
-        colorButton = self.createColorButton(color)
+        comboBox = self.create_signal_combo_box(signal)
+        colorButton = self.create_color_button(color)
 
         add_button = QPushButton("+")
         add_button.setMaximumWidth(30)
         add_button.clicked.connect(
-            lambda: self.handleAddButtonClick(add_button)
+            lambda: self.handle_add_button_click(add_button)
         )
 
         min_button = QPushButton("-")
         min_button.setMaximumWidth(30)
         min_button.clicked.connect(
-            lambda: self.handleMinButtonClick(min_button)
+            lambda: self.handle_min_button_click(min_button)
         )
 
         rowLayout.addWidget(comboBox)
@@ -112,7 +154,15 @@ class CellGraphWidget(QWidget):
                 True
             )
 
-    def createSignalComboBox(self, signal=None):
+    def create_signal_combo_box(self, signal: str | None = None) -> QComboBox:
+        """Creates a combo box populated with available signal names.
+
+        Args:
+            signal (Optional[str]): The signal to pre-select. Defaults to None.
+
+        Returns:
+            QComboBox: The configured combo box widget.
+        """
         comboBox = QComboBox()
         for sig in self.signal_list:
             comboBox.addItem(sig)
@@ -120,29 +170,44 @@ class CellGraphWidget(QWidget):
         if signal is not None:
             comboBox.setCurrentText(signal)
 
-        comboBox.activated[str].connect(self.onSelection)
+        comboBox.activated[str].connect(self.on_selection)
 
         return comboBox
 
-    def createColorButton(self, color=None):
+    def create_color_button(self, color: str | None = None) -> QPushButton:
+        """Creates a button for color selection.
+
+        Args:
+            color (str | None): The initial color for the button background.
+                Defaults to None, which sets the color to white.
+
+        Returns:
+            QPushButton: The configured color button.
+        """
         colorButton = QPushButton()
         colorButton.setMaximumWidth(30)  # Keep the button small
         if color:
             colorButton.setStyleSheet(f"background-color: {color}")
         else:
             colorButton.setStyleSheet("background-color: white")
-        colorButton.clicked.connect(lambda: self.selectColor(colorButton))
+        colorButton.clicked.connect(lambda: self.select_color(colorButton))
 
         return colorButton
 
-    def selectColor(self, button):
+    def select_color(self, button: QPushButton) -> None:
+        """Opens a color dialog and updates the button's background color.
+
+        Args:
+            button (QPushButton): The button to apply the selected color to.
+        """
         # Open a color dialog and set the selected color as the button's background
         color = QColorDialog.getColor()
         if color.isValid():
             button.setStyleSheet(f"background-color: {color.name()}")
-            self.onSelection()
+            self.on_selection()
 
-    def onSelection(self):
+    def on_selection(self) -> None:
+        """Updates the graph when a signal or color selection changes."""
         # update list of signals and colors
         signal_sel_list = []
         color_sel_list = []
@@ -172,21 +237,37 @@ class CellGraphWidget(QWidget):
         # update graph
         self.graph.update_graph_all()
 
-    def handleAddButtonClick(self, button):
+    def handle_add_button_click(self, button: QPushButton) -> None:
+        """Handles the click event for the add ('+') button.
 
-        self.addRowButton(button)
+        Args:
+            button (QPushButton): The button that was clicked.
+        """
 
-    def handleMinButtonClick(self, button):
+        self.add_row_button(button)
 
-        self.removeRowButton(button)
+    def handle_min_button_click(self, button: QPushButton) -> None:
+        """Handles the click event for the remove ('-') button.
 
-    def removeRowButton(self, button):
+        Args:
+            button (QPushButton): The button that was clicked.
+        """
+
+        self.remove_row_button(button)
+
+    def remove_row_button(self, button: QPushButton) -> None:
+        """Removes the row containing the specified button.
+
+        Args:
+            button (QPushButton): The button within the row to be removed.
+        """
+
         # Find the layout that contains the button and remove it
         for i in range(1, self.layout().count()):
             layout = self.layout().itemAt(i)
             # Check if this is the layout to be removed
             if layout.layout().indexOf(button) != -1:
-                self.clearLayout(layout.layout())
+                self.clear_layout(layout.layout())
                 self.layout().removeItem(layout)
                 break
 
@@ -196,19 +277,13 @@ class CellGraphWidget(QWidget):
             last_row.itemAt(3).widget().setEnabled(False)
 
         # update what is displayed
-        self.onSelection()
+        self.on_selection()
 
-    def clearLayout(self, layout):
-        if layout is not None:
-            while layout.count():
-                item = layout.takeAt(0)
-                widget = item.widget()
-                if widget is not None:
-                    widget.deleteLater()
+    def add_signal_graph(self) -> SignalGraph:
+        """Adds the signal graph widget to the main layout.
 
-    def add_signal_graph(self):
-        """
-        Add a signal graph
+        Returns:
+            SignalGraph: The instance of the created graph widget.
         """
         graph_widget = SignalGraph(
             self.viewer,
@@ -222,3 +297,17 @@ class CellGraphWidget(QWidget):
         self.layout().addWidget(graph_widget)
 
         return graph_widget
+
+    def clear_layout(self, layout: QLayout | None) -> None:
+        """Removes all widgets from a given layout.
+
+        Args:
+            layout (QLayout | None): The layout to clear. If None, the
+                function does nothing.
+        """
+        if layout is not None:
+            while layout.count():
+                item = layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()

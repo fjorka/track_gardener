@@ -1,5 +1,5 @@
 from contextlib import suppress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import napari
 from qtpy.QtCore import Qt
@@ -13,14 +13,13 @@ from qtpy.QtWidgets import (
 )
 
 from track_gardener.graph.family_graph import FamilyGraphWidget
-from track_gardener.widget.signal_graph_widget import CellGraphWidget
+from track_gardener.widget.widget_graph_signal import CellGraphWidget
 from track_gardener.widget.widget_modifications import ModificationWidget
 from track_gardener.widget.widget_navigation import TrackNavigationWidget
 from track_gardener.widget.widget_settings import SettingsWidget
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Dict, List, Optional
-
+    from napari import Viewer
     from sqlalchemy.orm import Session
 
 
@@ -32,12 +31,12 @@ class TrackGardener(QWidget):
     and interacting with the data through various sub-widgets.
     """
 
-    def __init__(self, viewer: Optional[napari.Viewer] = None) -> None:
+    def __init__(self, viewer: Optional["Viewer"] = None) -> None:
         """
         Initializes the TrackGardener widget.
 
         Args:
-            viewer (Optional[napari.Viewer]): The napari viewer instance. If None,
+            viewer (Optional[Viewer]): The napari viewer instance. If None,
                 the current viewer is retrieved using napari.current_viewer().
         """
 
@@ -120,20 +119,20 @@ class TrackGardener(QWidget):
 
     def create_widgets(
         self,
-        viewer: napari.Viewer,
-        session: Session,
-        ch_list: List[Any],
-        ch_names: List[str],
-        signal_list: List[Any],
-        graph_list: List[Dict[str, Any]],
-        cell_tags: Dict[Any, Any],
+        viewer: "Viewer",
+        session: "Session",
+        ch_list: list[Any],
+        ch_names: list[str],
+        signal_list: list[Any],
+        graph_list: list[dict[str, Any]],
+        cell_tags: dict[Any, Any],
         signal_function: Callable,
     ) -> None:
         """
         Creates and populates the interactive widgets in the 'interact' tab.
 
         Args:
-            viewer (napari.Viewer): The napari viewer instance.
+            viewer (Viewer): The napari viewer instance.
             session (Session): The SQLAlchemy session object for database interaction.
             ch_list (List[Any]): List of channels.
             ch_names (List[str]): Names corresponding to the channels.

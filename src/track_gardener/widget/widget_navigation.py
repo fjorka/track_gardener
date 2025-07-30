@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 from qtpy.QtCore import QTimer
 from qtpy.QtWidgets import (
@@ -13,13 +15,39 @@ from sqlalchemy import and_
 
 from track_gardener.db.db_model import CellDB, TrackDB
 
+if TYPE_CHECKING:
+    from napari import Viewer
+    from napari.layers import Labels
+    from sqlalchemy.orm import Session
+    from vispy.app import MouseEvent
+
+
 DEBOUNCE_INTERVAL_MS = 150
 MAX_QUERY_LIMIT = 500
 MIN_AREA_FOR_LABELS = 1000 * 2000
 
 
 class TrackNavigationWidget(QWidget):
-    def __init__(self, napari_viewer, sql_session):
+    """
+    A widget for navigating tracks and updating the napari labels layer.
+
+    This widget handles displaying cell segmentation masks from a database
+    onto the napari 'Labels' layer. It dynamically updates the view based on
+    camera position and zoom level, using a debounced full update and a
+    lightweight single-track update for performance. It also provides
+    UI controls for track navigation (start, end, center) and a "follow"
+    mode to keep the selected track centered.
+    """
+
+    def __init__(
+        self, napari_viewer: "Viewer", sql_session: "Session"
+    ) -> None:
+        """Initializes the TrackNavigationWidget.
+
+        Args:
+            napari_viewer (Viewer): The napari viewer instance.
+            sql_session (Session): The SQLAlchemy session for database operations.
+        """
         super().__init__()
         self.setLayout(QVBoxLayout())
 
@@ -67,17 +95,18 @@ class TrackNavigationWidget(QWidget):
     # shortcuts
     #########################################################
 
-    def init_shortcuts(self):
-        """
-        Initialize shortcuts for the widget.
-        """
+    def init_shortcuts(self) -> None:
+        """Initializes shortcuts for the widget, like right-click selection."""
+
         # add a shortcut for right click selection
         self.labels.mouse_drag_callbacks.append(self.select_label)
 
-    def select_label(self, viewer, event):
-        """
-        Select a label by right click.
-        Works on any layer.
+    def select_label(self, layer: "Labels", event: "MouseEvent") -> None:
+        """Selects a label in the labels layer via a right-click.
+
+        Args:
+            layer (Labels): The labels layer that was clicked.
+            event (MouseEvent): The mouse event from napari.
         """
         if event.button == 2 and self.labels.metadata["display"]:
 
@@ -113,9 +142,16 @@ class TrackNavigationWidget(QWidget):
     # labels_layer_update
     #########################################################
 
-    def build_labels(self):
-        """
-        Function to build the labels layer based on db content
+    def build_labels(self, event: Any = None) -> None:
+        """Builds the labels layer based on the current view and zoom level.
+
+        This function acts as a dispatcher. If the view is zoomed out too far,
+        it clears the labels. If zoomed in, it decides whether to perform a
+        quick, single-track update (for responsiveness) or trigger a debounced
+        full update of all tracks in the viewport.
+
+        Args:
+            event (Any, optional): The event that triggered the call. Defaults to None.
         """
 
         # check if the labels are visible at all
@@ -144,9 +180,11 @@ class TrackNavigationWidget(QWidget):
                 self.labels.data = np.zeros([1, 1], dtype=int)
                 self.viewer.status = "Zoom in to display labels."
 
-    def full_labels_update(self):
-        """
-        Full update
+    def full_labels_update(self) -> None:
+        """Performs a full update of the labels layer.
+
+        Queries the database for all cells within the fov,
+        then renders their segmentation masks onto the labels layer.
         """
 
         # get the current frame
@@ -162,8 +200,6 @@ class TrackNavigationWidget(QWidget):
         r_stop = int(corner_pixels[1, 1])
         c_start = int(corner_pixels[0, 2])
         c_stop = int(corner_pixels[1, 2])
-
-        # self.viewer.status = f"Current view: {r_start}:{r_stop}, {c_start}:{c_stop} at frame {current_frame}"
 
         # query the database
         query = (
@@ -226,9 +262,11 @@ class TrackNavigationWidget(QWidget):
             self.labels.metadata["display"] = False
             self.viewer.status = f"More than {self.query_lim} in the field - zoom in to display labels."
 
-    def light_labels_update(self):
-        """
-        Light update
+    def light_labels_update(self) -> None:
+        """Performs a lightweight update of the labels layer.
+
+        This update only queries and displays the currently selected track,
+        making it much faster for quick navigation or when following a track.
         """
 
         # get the current frame
@@ -258,9 +296,11 @@ class TrackNavigationWidget(QWidget):
     # track navigation
     #########################################################
 
-    def add_navigation_control(self):
-        """
-        Add a set of buttons to navigate position within the track
+    def add_navigation_control(self) -> QWidget:
+        """Creates and returns the track navigation control widget.
+
+        Returns:
+            QWidget: The widget containing start, center, and end buttons.
         """
 
         navigation_row = QWidget()
@@ -276,9 +316,11 @@ class TrackNavigationWidget(QWidget):
 
         return navigation_row
 
-    def add_center_object_btn(self):
-        """
-        Add a button to center the object.
+    def add_center_object_btn(self) -> QPushButton:
+        """Creates the 'Center object' button.
+
+        Returns:
+            QPushButton: The configured 'Center object' button.
         """
         center_object_btn = QPushButton("<>")
 
@@ -286,9 +328,11 @@ class TrackNavigationWidget(QWidget):
 
         return center_object_btn
 
-    def center_object_core_function(self):
-        """
-        Center the object that exists on this frame.
+    def center_object_core_function(self, event: Any = None) -> None:
+        """Core logic to center the camera on the selected object at the current time.
+
+        Args:
+            event (Any, optional): The event that triggered the call. Defaults to None.
         """
         # orient yourself
         track_id = int(
@@ -324,9 +368,11 @@ class TrackNavigationWidget(QWidget):
             self.viewer.status = "No object in this frame."
             self.build_labels()
 
-    def center_object_function(self):
-        """
-        Center the object.
+    def center_object_function(self) -> None:
+        """Centers the view on the selected object.
+
+        If the current time is outside the track's lifespan, it first jumps
+        to the nearest valid time point (start or end) before centering.
         """
 
         # orient yourself
@@ -356,9 +402,11 @@ class TrackNavigationWidget(QWidget):
             self.viewer.status = "No object selected."
             self.build_labels()
 
-    def add_start_track_btn(self):
-        """
-        Add a button to cut tracks.
+    def add_start_track_btn(self) -> QPushButton:
+        """Creates the 'Go to track start' button.
+
+        Returns:
+            QPushButton: The configured button.
         """
         start_track_btn = QPushButton("<")
 
@@ -366,10 +414,9 @@ class TrackNavigationWidget(QWidget):
 
         return start_track_btn
 
-    def start_track_function(self):
-        """
-        Go to the beginning of the track.
-        """
+    def start_track_function(self) -> None:
+        """Navigates the viewer to the first frame of the selected track."""
+
         # find the beginning of a track
         tr = self.labels.selected_label
         t_begin = (
@@ -382,9 +429,11 @@ class TrackNavigationWidget(QWidget):
         # center the cell
         self.center_object_core_function()
 
-    def add_end_track_btn(self):
-        """
-        Add a button to go to the end of the track
+    def add_end_track_btn(self) -> QPushButton:
+        """Creates the 'Go to track end' button.
+
+        Returns:
+            QPushButton: The configured button.
         """
         end_track_btn = QPushButton(">")
 
@@ -392,10 +441,8 @@ class TrackNavigationWidget(QWidget):
 
         return end_track_btn
 
-    def end_track_function(self):
-        """
-        Go to the last point in the track
-        """
+    def end_track_function(self) -> None:
+        """Navigates the viewer to the last frame of the selected track."""
         # find the beginning of a track
         tr = self.labels.selected_label
         t_end = (
@@ -412,22 +459,23 @@ class TrackNavigationWidget(QWidget):
     # cell following
     #########################################################
 
-    def add_follow_object_checkbox(self):
-        """
-        Add a checkbox to follow the object.
+    def add_follow_object_checkbox(self) -> QCheckBox:
+        """Creates the 'Follow track' checkbox.
+
+        Returns:
+            QCheckBox: The configured checkbox.
         """
         follow_object_checkbox = QCheckBox("follow track")
 
         follow_object_checkbox.stateChanged.connect(
-            self.followBoxStateChanged_function
+            self.handle_follow_box_state_change
         )
 
         return follow_object_checkbox
 
-    def followBoxStateChanged_function(self):
-        """
-        Follow the object if the checkbox is checked.
-        """
+    def handle_follow_box_state_change(self) -> None:
+        """Connects or disconnects event listeners based on the 'follow' checkbox state."""
+
         if self.follow_object_checkbox.isChecked():
             self.viewer.status = "Following the object is turned on."
 
