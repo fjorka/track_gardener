@@ -125,7 +125,7 @@ def test_add_graph(viewer, db_session):
     set_widget.add_new_graph_widget()
 
     assert "New Graph" in list(
-        viewer.window._dock_widgets.keys()
+        viewer.window.dock_widgets.keys()
     ), f"Expected a new graph widget to be added, but widgets are {list(viewer.window._dock_widgets.keys())}"
 
 

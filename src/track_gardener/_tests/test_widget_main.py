@@ -1,3 +1,6 @@
+import os
+
+import pytest
 from qtpy.QtWidgets import QTabWidget
 
 from track_gardener.widgets.widget_main import TrackGardener
@@ -51,6 +54,10 @@ def test_adding_widgets(viewer, db_session):
     ), f"Expected to create 2 graph widgets, instead got {len(main_widget.napari_widgets)}"
 
 
+@pytest.mark.xfail(
+    os.environ.get("CI") == "true",
+    reason="Known teardown bug with pyqtgraph LabelItem on CI: https://github.com/pyqtgraph/pyqtgraph/issues/472",
+)
 def test_clearing_widgets(viewer, db_session):
     """
     Test clearing of the widgets.
