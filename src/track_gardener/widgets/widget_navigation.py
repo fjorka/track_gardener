@@ -235,10 +235,10 @@ class TrackNavigationWidget(QWidget):
         if (len(query) < self.query_lim) and (len(query) > 0):
 
             # get query extent and position
-            r_start_frame = min([x.bbox_0 for x in query])
-            r_stop_frame = max([x.bbox_2 for x in query])
-            c_start_frame = min([x.bbox_1 for x in query])
-            c_stop_frame = max([x.bbox_3 for x in query])
+            r_start_frame = min([x.bbox_0 for x in query] + [r_start])
+            r_stop_frame = max([x.bbox_2 for x in query] + [r_stop])
+            c_start_frame = min([x.bbox_1 for x in query] + [c_start])
+            c_stop_frame = max([x.bbox_3 for x in query] + [c_stop])
 
             # build the frame
             frame = np.zeros(
