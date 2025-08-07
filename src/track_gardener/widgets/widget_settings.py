@@ -1,3 +1,14 @@
+"""A napari widget for loading and managing tracking experiment configurations.
+
+This module defines the `SettingsWidget`, which serves as the primary user
+interface for initiating a tracking session. It provides controls to load a
+YAML configuration file, which specifies paths to image data and the tracking
+database. Upon loading, this widget orchestrates the setup of the napari
+environment by clearing old data, loading new image and label layers,
+establishing a database connection, and triggering the creation of all other
+interactive widgets for curation and visualization.
+"""
+
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
@@ -22,11 +33,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import track_gardener.db.db_functions as fdb
-from track_gardener.db.config_functions import (
+from track_gardener.db.config_functions import validateConfigFile
+from track_gardener.signals.build_signals_function import (
     create_calculate_signals_function,
-    validateConfigFile,
 )
-from track_gardener.widget.widget_graph_signal import CellGraphWidget
+from track_gardener.widgets.widget_signal_plot_controller import (
+    SignalPlotControlPanel,
+)
 
 if TYPE_CHECKING:
     from napari.viewer import Viewer
@@ -326,9 +339,9 @@ class SettingsWidget(QWidget):
         self.viewer.status = "Tracking loaded"
 
     def add_new_graph_widget(self) -> None:
-        """Creates a new CellGraphWidget and adds it to the viewer."""
+        """Creates a new SignalPlotControlPanel and adds it to the viewer."""
 
-        graph_widget = CellGraphWidget(
+        graph_widget = SignalPlotControlPanel(
             self.viewer,
             self.session,
             self.signal_list,

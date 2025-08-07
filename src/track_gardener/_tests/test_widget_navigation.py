@@ -2,7 +2,7 @@ from unittest.mock import Mock
 
 import numpy as np
 
-from track_gardener.widget.widget_navigation import TrackNavigationWidget
+from track_gardener.widgets.widget_navigation import TrackNavigationWidget
 
 
 def test_select_label(qtbot, viewer, db_session):

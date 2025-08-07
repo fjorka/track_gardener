@@ -1,3 +1,11 @@
+"""A napari widget providing tools for direct modification of tracking data.
+
+This module defines the `ModificationWidget`, a QWidget that contains the
+primary user interface for editing tracks and cells. It provides buttons and
+controls for track-level operations like merging, connecting, and cutting,
+as well as cell-level annotations like notes and tags.
+"""
+
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -33,15 +41,6 @@ class ModificationWidget(QWidget):
     and connect tracks, as well as add notes and tags to individual cells.
     It interacts directly with the napari viewer and a SQLAlchemy database
     session to persist changes.
-
-    Attributes:
-        viewer (Viewer): The napari viewer instance.
-        labels (Labels): The napari labels layer for segmentation masks.
-        session (Session): The SQLAlchemy session for database interaction.
-        ch_list (Optional[list[Any]]): List of channel data.
-        ch_names (Optional[list[str]]): Names of the channels.
-        signal_function (Optional[Callable]): A function to calculate signals.
-        tag_dictionary (dict[str, Any]): A dictionary of available tags.
     """
 
     def __init__(
@@ -281,7 +280,7 @@ class ModificationWidget(QWidget):
 
         # if cutting in the middle of a track
         elif new_track:
-            fdb.cellsDB_after_trackDB(
+            fdb.update_cellsDB_after_trackDB(
                 self.session,
                 active_label,
                 current_frame,
@@ -341,7 +340,7 @@ class ModificationWidget(QWidget):
         status = fdb.delete_trackDB(self.session, active_label)
 
         if status != "Track not found":
-            fdb.cellsDB_after_trackDB(
+            fdb.update_cellsDB_after_trackDB(
                 self.session,
                 active_label,
                 current_frame=None,
@@ -411,12 +410,12 @@ class ModificationWidget(QWidget):
 
         if t1_after is not None:
             # modify cellsDB of t1
-            fdb.cellsDB_after_trackDB(
+            fdb.update_cellsDB_after_trackDB(
                 self.session, t1, curr_fr, t1_after, direction="after"
             )
 
         # modify cellsDB of t2
-        fdb.cellsDB_after_trackDB(
+        fdb.update_cellsDB_after_trackDB(
             self.session, t2, curr_fr, t1, direction="after"
         )
 
@@ -488,7 +487,7 @@ class ModificationWidget(QWidget):
 
         if t1_after is not None:
             # modify cellsDB of t1_after
-            fdb.cellsDB_after_trackDB(
+            fdb.update_cellsDB_after_trackDB(
                 self.session, t1, curr_fr, t1_after, direction="after"
             )
 
@@ -497,7 +496,7 @@ class ModificationWidget(QWidget):
 
         if t2_before is not None:
             # modify cellsDB of t2
-            fdb.cellsDB_after_trackDB(
+            fdb.update_cellsDB_after_trackDB(
                 self.session, t2, curr_fr, t2_before, direction="before"
             )
 
@@ -547,7 +546,7 @@ class ModificationWidget(QWidget):
     def new_track_function(self) -> None:
         """Gets a new unique track ID and sets it as the selected label."""
 
-        new_track = fdb.newTrack_number(self.session)
+        new_track = fdb.get_new_track_id(self.session)
         self.labels.selected_label = new_track
 
         self.viewer.status = f"You can start track {new_track}."
@@ -665,7 +664,7 @@ class ModificationWidget(QWidget):
         active_cell = self.labels.selected_label
         frame = self.viewer.dims.current_step[0]
 
-        sts = fdb.tag_cell(self.session, active_cell, frame, annotation)
+        sts = fdb.toggle_cell_tag(self.session, active_cell, frame, annotation)
 
         # round trip to refresh the query and the viewer
         sel_label = self.labels.selected_label
@@ -694,7 +693,7 @@ class ModificationWidget(QWidget):
 
         return mod_cell_btn
 
-    def mod_cell_function(self) -> None:
+    def mod_cell_function(self, event: Any | None = None) -> None:
         """Saves cell modifications (add, modify, delete) to the database.
 
         Compares the current labels in the FOV with the database state and saves any changes.

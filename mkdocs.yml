@@ -1,22 +1,47 @@
 site_name: Track Gardener
+repo_name: "fjorka/track_gardener"
+repo_url: "https://github.com/fjorka/track_gardener"
+watch: [mkdocs.yml, README.md, src]
+
 theme:
   name: material
+  palette:
+    scheme: slate
+
+extra_css:
+  - stylesheets/extra.css
 
 nav:
-  - Home: index.md
-  - Configuration File: configuration.md
-  - Usage: initialize.md
-
+  - Home: about.md
+  - Getting Started:
+    - Installation: getting_started/installation.md
+    - Loading Example Data: getting_started/loading_data.md
+    - Getting Around: getting_started/tracks.md
+  - Using Your Own Data:
+    - Configuration: own_data/configuration.md
+    - Data Conversion: own_data/conversion.md
 
 plugins:
   - search
+  # following https://github.com/tlambert03/mkdocs-api-autonav/tree/main
   - mkdocstrings:
       handlers:
         python:
-          paths: [src]
+          import:
+            - https://docs.python.org/3/objects.inv
           options:
-            show_root_toc_entry: false
+            docstring_section_style: table
+            docstring_style: "google"
+            filters: ["!^_"]
+            heading_level: 1
             merge_init_into_class: true
-            show_source: false
-            extra:
-              show_symbol_type: true
+            parameter_headings: true
+            separate_signature: true
+            show_root_heading: false
+            show_root_full_path: false
+            show_signature_annotations: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            summary: true
+  - api-autonav:
+      modules: ['src/track_gardener']

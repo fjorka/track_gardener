@@ -7,7 +7,7 @@ categories: ["Annotation"]
 contributions:
   commands:
     - id: track-gardener.TrackGardener
-      python_name: track_gardener.widget.widget_main:TrackGardener
+      python_name: track_gardener.widgets.widget_main:TrackGardener
       title: Main Track Gardener Widget
   # sample_data:
   #   - command: track-gardener.make_sample_data

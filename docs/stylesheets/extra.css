@@ -1,0 +1,8 @@
+.md-sidebar--primary::before{
+  content: "";
+  display: block;
+  background: url('/assets/track_gardener_logo_black_long_transparent.png') no-repeat center center;
+  background-size: contain;
+  height: 120px;
+  margin-bottom: 1em;
+}

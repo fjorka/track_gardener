@@ -1,3 +1,11 @@
+"""The main napari widget for curating and visualizing cell tracking data.
+
+This module defines the `TrackGardener` class, a QWidget that serves as the
+main user interface for the plugin. It orchestrates the layout and interaction
+of various sub-widgets for settings, navigation, track modification, and data
+visualization, organizing them into a tabbed interface.
+"""
+
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
@@ -12,11 +20,13 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from track_gardener.graph.family_graph import FamilyGraphWidget
-from track_gardener.widget.widget_graph_signal import CellGraphWidget
-from track_gardener.widget.widget_modifications import ModificationWidget
-from track_gardener.widget.widget_navigation import TrackNavigationWidget
-from track_gardener.widget.widget_settings import SettingsWidget
+from track_gardener.plots.lineage_plot_canvas import LineagePlotCanvas
+from track_gardener.widgets.widget_modifications import ModificationWidget
+from track_gardener.widgets.widget_navigation import TrackNavigationWidget
+from track_gardener.widgets.widget_settings import SettingsWidget
+from track_gardener.widgets.widget_signal_plot_controller import (
+    SignalPlotControlPanel,
+)
 
 if TYPE_CHECKING:
     from napari import Viewer
@@ -70,7 +80,7 @@ class TrackGardener(QWidget):
         # add tab widget to the layout
         self.layout().addWidget(self.tabwidget, 0, 0)
 
-    def clear_widgets(self):
+    def clear_widgets(self) -> None:
         """
         Removes all interactive widgets and disconnects event callbacks.
 
@@ -181,7 +191,7 @@ class TrackGardener(QWidget):
         self.tab2.layout().addWidget(scroll_area, 1)
 
         # add lineage graph
-        fam_plot_widget = FamilyGraphWidget(self.viewer, session)
+        fam_plot_widget = LineagePlotCanvas(self.viewer, session)
         self.viewer.window.add_dock_widget(fam_plot_widget, area="bottom")
         self.napari_widgets.append(fam_plot_widget)
 
@@ -190,7 +200,7 @@ class TrackGardener(QWidget):
             graph_name = gr.get("name", "Unnamed")
             graph_signals = gr.get("signals", [])
             graph_colors = gr.get("colors", [])
-            graph_widget = CellGraphWidget(
+            graph_widget = SignalPlotControlPanel(
                 viewer,
                 session,
                 signal_list,

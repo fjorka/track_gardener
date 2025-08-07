@@ -1,21 +1,23 @@
 from unittest.mock import MagicMock
 
+import networkx as nx
 import numpy as np
 import pytest
 from sqlalchemy.orm import Session, make_transient
 
 import track_gardener.db.db_functions as fdb
 from track_gardener.db.db_functions import (
-    add_new_core_CellDB,
-    cellsDB_after_trackDB,
+    create_CellDB_core,
     cut_trackDB,
     delete_trackDB,
     get_descendants,
+    get_new_cell_id,
+    get_new_track_id,
+    get_tracks_nx_from_root,
     integrate_trackDB,
-    newCell_number,
-    newTrack_number,
     remove_CellDB,
-    trackDB_after_cellDB,
+    update_cellsDB_after_trackDB,
+    update_trackDB_after_cellDB,
 )
 from track_gardener.db.db_model import NO_PARENT, CellDB, TrackDB
 
@@ -111,10 +113,10 @@ def test_remove_none_track(extended_db_session):
     assert len(extended_db_session.query(TrackDB).all()) == len(init_len)
 
 
-def test_newTrack_number(extended_db_session):
+def test_get_new_track_id(extended_db_session):
     """Test - getting a new track number."""
 
-    new_track = newTrack_number(extended_db_session)
+    new_track = get_new_track_id(extended_db_session)
     assert new_track == 235
 
     new_track_number = 6e10
@@ -128,11 +130,11 @@ def test_newTrack_number(extended_db_session):
     extended_db_session.add(new_track)
     extended_db_session.commit()
 
-    new_track = newTrack_number(extended_db_session)
+    new_track = get_new_track_id(extended_db_session)
     assert new_track == new_track_number + 1
 
 
-def test_newTrack_number_empty_db(extended_db_session):
+def test_new_track_id_empty_db(extended_db_session):
     """Test - getting a new track number
     while the database is empty"""
 
@@ -147,11 +149,11 @@ def test_newTrack_number_empty_db(extended_db_session):
     assert len(query) == 0, f"Expected database to be empty, got {len(query)}"
 
     # asssert the correct new track number
-    new_track = newTrack_number(extended_db_session)
+    new_track = get_new_track_id(extended_db_session)
     assert new_track == 1, f"Expected 1, got {new_track}"
 
 
-def test_newCell_number(extended_db_session):
+def test_get_new_cell_id(extended_db_session):
     """Test - getting a new cell number."""
 
     new_cell_number = 6e10
@@ -159,7 +161,7 @@ def test_newCell_number(extended_db_session):
     extended_db_session.add(new_cell)
     extended_db_session.commit()
 
-    new_cell = newCell_number(extended_db_session)
+    new_cell = get_new_cell_id(extended_db_session)
     assert new_cell == new_cell_number + 1
 
 
@@ -195,7 +197,7 @@ def test_cut_trackDB(extended_db_session):
     active_label = 225
     current_frame = 2
 
-    new_track_expected = newTrack_number(extended_db_session)
+    new_track_expected = get_new_track_id(extended_db_session)
 
     mitosis, new_track = cut_trackDB(
         extended_db_session, active_label, current_frame
@@ -343,7 +345,7 @@ def test_cut_trackDB_mitosis(extended_db_session):
     t_begin_org = record.t_begin
     t_end_org = record.t_end
 
-    new_track_hypothesis = newTrack_number(extended_db_session)
+    new_track_hypothesis = get_new_track_id(extended_db_session)
 
     mitosis, new_track = cut_trackDB(
         extended_db_session, active_label, t_begin_org
@@ -407,7 +409,7 @@ def test_cut_merge_trackDB(extended_db_session):
     active_label = 225
     current_frame = 2
 
-    new_track_expected = newTrack_number(extended_db_session)
+    new_track_expected = get_new_track_id(extended_db_session)
 
     mitosis, new_track = cut_trackDB(
         extended_db_session, active_label, current_frame
@@ -502,7 +504,7 @@ def test_cut_merge_trackDB(extended_db_session):
     )
 
 
-def test_cellsDB_after_trackDB_nonsense_call(extended_db_session):
+def test_update_cellsDB_after_trackDB_nonsense_call(extended_db_session):
     """Test nonsense call response"""
 
     active_label = 20422
@@ -511,7 +513,7 @@ def test_cellsDB_after_trackDB_nonsense_call(extended_db_session):
     new_track = 100
 
     with pytest.raises(ValueError) as exc_info:
-        _ = cellsDB_after_trackDB(
+        _ = update_cellsDB_after_trackDB(
             extended_db_session,
             active_label,
             current_frame,
@@ -523,7 +525,7 @@ def test_cellsDB_after_trackDB_nonsense_call(extended_db_session):
     assert str(exc_info.value) == exp_status
 
 
-def test_cellsDB_after_trackDB(extended_db_session):
+def test_update_cellsDB_after_trackDB(extended_db_session):
     """Test modifications in the cells table after a track is moodified."""
 
     active_label = 228
@@ -546,7 +548,7 @@ def test_cellsDB_after_trackDB(extended_db_session):
     current_frame = 9
     new_track = 100
 
-    _ = cellsDB_after_trackDB(
+    _ = update_cellsDB_after_trackDB(
         extended_db_session,
         active_label,
         current_frame,
@@ -571,7 +573,7 @@ def test_cellsDB_after_trackDB(extended_db_session):
 
 
 def test_modify_track_cellsDB_before(extended_db_session):
-    """Test checking whether the cellsDB_after_trackDB - in before direction."""
+    """Test checking whether the update_cellsDB_after_trackDB - in before direction."""
 
     active_label = 228
 
@@ -593,7 +595,7 @@ def test_modify_track_cellsDB_before(extended_db_session):
     current_frame = 8
     new_track = 100
 
-    _ = cellsDB_after_trackDB(
+    _ = update_cellsDB_after_trackDB(
         extended_db_session,
         active_label,
         current_frame,
@@ -683,7 +685,7 @@ def test_double_cut_merge(extended_db_session):
     t2_ind = 208
     current_frame = 42
 
-    expected_new_track = newTrack_number(extended_db_session)
+    expected_new_track = get_new_track_id(extended_db_session)
 
     t1_org = (
         extended_db_session.query(TrackDB).filter_by(track_id=t1_ind).one()
@@ -767,7 +769,7 @@ def test_after_t1_end_track_merge(extended_db_session):
     t2_ind = 228
     current_frame = 10
 
-    expected_new_track = newTrack_number(extended_db_session)
+    expected_new_track = get_new_track_id(extended_db_session)
 
     t1_org = (
         extended_db_session.query(TrackDB).filter_by(track_id=t1_ind).one()
@@ -855,7 +857,7 @@ def test_before_t2_start_track_merge(extended_db_session):
     t2_ind = 211
     current_frame = 20
 
-    expected_new_track = newTrack_number(extended_db_session)
+    expected_new_track = get_new_track_id(extended_db_session)
 
     t1_org = (
         extended_db_session.query(TrackDB).filter_by(track_id=t1_ind).one()
@@ -1006,8 +1008,8 @@ def test_freely_floating_connect(extended_db_session):
     t2_ind = 227
     current_frame = 30
 
-    expected_t1_after = newTrack_number(extended_db_session)
-    expected_t2_before = newTrack_number(extended_db_session) + 1
+    expected_t1_after = get_new_track_id(extended_db_session)
+    expected_t2_before = get_new_track_id(extended_db_session) + 1
 
     t1_org = (
         extended_db_session.query(TrackDB).filter_by(track_id=t1_ind).one()
@@ -1087,7 +1089,7 @@ def test_freely_floating_connect(extended_db_session):
         assert t2_before.root == t2.root
 
 
-def test_trackDB_after_cellDB_no_change(extended_db_session):
+def test_update_trackDB_after_cellDB_no_change(extended_db_session):
     """
     Tests if the modification happened at a time frame inside of a track
     """
@@ -1110,7 +1112,7 @@ def test_trackDB_after_cellDB_no_change(extended_db_session):
     # Detach the copy from the session
     make_transient(t1)
 
-    trackDB_after_cellDB(extended_db_session, t1_ind, current_frame)
+    update_trackDB_after_cellDB(extended_db_session, t1_ind, current_frame)
 
     # assert that t1_ind track is not changed
     new_t1 = (
@@ -1122,7 +1124,7 @@ def test_trackDB_after_cellDB_no_change(extended_db_session):
     assert new_t1.root == t1.root
 
 
-def test_trackDB_after_cellDB_new_track(extended_db_session):
+def test_update_trackDB_after_cellDB_new_track(extended_db_session):
     """
     Tests if the new cell is added to the database.
     """
@@ -1146,9 +1148,9 @@ def test_trackDB_after_cellDB_new_track(extended_db_session):
     cell = MagicMock()
     for key in cell_dict:
         setattr(cell, key, cell_dict[key])
-    add_new_core_CellDB(extended_db_session, current_frame, cell)
+    create_CellDB_core(extended_db_session, current_frame, cell)
     # modify tracks table after adding this fake cell
-    trackDB_after_cellDB(extended_db_session, t1_ind, current_frame)
+    update_trackDB_after_cellDB(extended_db_session, t1_ind, current_frame)
 
     # assert that t1_ind track is not changed
     new_t1 = (
@@ -1160,7 +1162,7 @@ def test_trackDB_after_cellDB_new_track(extended_db_session):
     assert new_t1.root == t1_ind
 
 
-def test_trackDB_after_cellDB_added_after(extended_db_session):
+def test_update_trackDB_after_cellDB_added_after(extended_db_session):
     """
     Tests a modification that extends the track.
     """
@@ -1211,8 +1213,8 @@ def test_trackDB_after_cellDB_added_after(extended_db_session):
     for key in cell_dict:
         setattr(cell, key, cell_dict[key])
 
-    add_new_core_CellDB(extended_db_session, current_frame, cell)
-    trackDB_after_cellDB(extended_db_session, t1_ind, current_frame)
+    create_CellDB_core(extended_db_session, current_frame, cell)
+    update_trackDB_after_cellDB(extended_db_session, t1_ind, current_frame)
 
     # assert that t1_ind track is not changed
     new_t1 = (
@@ -1282,7 +1284,7 @@ def test_remove_cell_cut_track(extended_db_session):
     remove_CellDB(extended_db_session, active_label, current_frame)
 
     current_frame = 21
-    new_track = newTrack_number(extended_db_session)
+    new_track = get_new_track_id(extended_db_session)
 
     mitosis, new_track = cut_trackDB(
         extended_db_session, active_label, current_frame
@@ -1368,7 +1370,9 @@ def test_add_tags(extended_db_session):
 
     assert cell_list.tags == {}, f"Expected no tag, got {cell_list.tags}"
 
-    _ = fdb.tag_cell(extended_db_session, active_cell, frame, annotation)
+    _ = fdb.toggle_cell_tag(
+        extended_db_session, active_cell, frame, annotation
+    )
 
     cell_list = (
         extended_db_session.query(CellDB)
@@ -1378,3 +1382,30 @@ def test_add_tags(extended_db_session):
     )
 
     assert cell_list.tags["apoptosis"], f"Expected True, got {cell_list.tags}"
+
+
+def test_get_nx_graph(extended_db_session):
+    """
+    Test getting a correct nx graph from the query.
+    """
+
+    root_id = 204
+    G = get_tracks_nx_from_root(extended_db_session, root_id)
+
+    assert isinstance(G, nx.DiGraph), "Expected a directed graph."
+    assert G.number_of_nodes() == 7, "Expected the graph to have 7 nodes."
+    assert nx.is_weakly_connected(
+        G
+    ), "Expected the graph to be weakly connected."
+
+
+def test_get_nx_graph_not_root(extended_db_session):
+    """
+    Test getting a correct nx graph from the query.
+    """
+
+    root_id = 205
+    G = get_tracks_nx_from_root(extended_db_session, root_id)
+
+    assert isinstance(G, nx.DiGraph), "Expected a directed graph."
+    assert G.number_of_nodes() == 0, "Expected the graph to have 0 nodes."

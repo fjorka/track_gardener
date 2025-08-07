@@ -2,14 +2,12 @@ from unittest.mock import Mock
 
 from qtpy.QtCore import QPointF, Qt
 
+from track_gardener.db.db_functions import get_tracks_nx_from_root
 from track_gardener.db.db_model import TrackDB
-from track_gardener.graph.family_graph import (
-    FamilyGraphWidget,
-    build_Newick_tree,
-)
+from track_gardener.plots.lineage_plot_canvas import LineagePlotCanvas
 
 
-def test_basic_family_graph(db_session):
+def test_basic_lineage_plot_canvas(db_session):
     """
     Test creation of the family graph based on the test database.
     """
@@ -17,7 +15,7 @@ def test_basic_family_graph(db_session):
     track_id = 225
     track_descendant = 227
 
-    t = build_Newick_tree(db_session, track_id)
+    t = get_tracks_nx_from_root(db_session, track_id)
 
     print(f"Nodes in tree: {t.nodes}")
     print(f"Edges in tree: {t.edges}")
@@ -45,16 +43,16 @@ def test_generating_tree_upon_selection(viewer, db_session):
     track_id = 204
     track_descendant = 211
 
-    family_graph = FamilyGraphWidget(viewer, db_session)
+    lineage_plot_canvas = LineagePlotCanvas(viewer, db_session)
 
     viewer.layers["Labels"].selected_label = track_id
 
     assert (
-        family_graph.tree is not None
+        lineage_plot_canvas.tree is not None
     ), "Expected to get a tree after selecting a new object."
 
     assert (
-        track_descendant in family_graph.tree.nodes
+        track_descendant in lineage_plot_canvas.tree.nodes
     ), f"Expected to get a tree containing node {track_descendant}"
 
 
@@ -65,18 +63,18 @@ def test_selection_of_track(viewer, db_session):
 
     track_id = 204
 
-    family_graph = FamilyGraphWidget(viewer, db_session)
+    lineage_plot_canvas = LineagePlotCanvas(viewer, db_session)
 
     viewer.layers["Labels"].selected_label = track_id
 
     # Assert the expected outcome
     expected_label = track_id
     assert (
-        family_graph.labels.selected_label == expected_label
-    ), f"Expected to select track {expected_label}, got {family_graph.labels.selected_label}"
+        lineage_plot_canvas.labels.selected_label == expected_label
+    ), f"Expected to select track {expected_label}, got {lineage_plot_canvas.labels.selected_label}"
 
     # Set up a mock event with proper coordinate translation
-    vb = family_graph.plot_view.vb
+    vb = lineage_plot_canvas.plot_view.vb
 
     # Desired data coordinates
     data_x, data_y = 10, 0.0
@@ -91,12 +89,12 @@ def test_selection_of_track(viewer, db_session):
     mock_event.button = Mock(return_value=Qt.LeftButton)  # Left mouse button
 
     # Perform the click
-    family_graph.onMouseClick(mock_event)
+    lineage_plot_canvas.on_mouse_click(mock_event)
 
     # Assert the expected outcome
     assert (
-        family_graph.labels.selected_label == expected_label
-    ), f"Expected to select track {expected_label}, got {family_graph.labels.selected_label}"
+        lineage_plot_canvas.labels.selected_label == expected_label
+    ), f"Expected to select track {expected_label}, got {lineage_plot_canvas.labels.selected_label}"
 
 
 def test_selection_of_non_existant_track(viewer, db_session):
@@ -105,7 +103,7 @@ def test_selection_of_non_existant_track(viewer, db_session):
     """
 
     # Retain reference to ensure it remains active
-    family_graph = FamilyGraphWidget(viewer, db_session)  # noqa: F841
+    lineage_plot_canvas = LineagePlotCanvas(viewer, db_session)  # noqa: F841
 
     viewer.layers["Labels"].selected_label = 777
 
@@ -120,12 +118,12 @@ def test_change_track_status(viewer, db_session):
     """
     Test changing the status of a track in the family graph with a right click.
     """
-    family_graph = FamilyGraphWidget(viewer, db_session)
+    lineage_plot_canvas = LineagePlotCanvas(viewer, db_session)
 
     viewer.layers["Labels"].selected_label = 204
 
     # Set up a mock event with proper coordinate translation
-    vb = family_graph.plot_view.vb
+    vb = lineage_plot_canvas.plot_view.vb
 
     # Desired data coordinates
     data_x, data_y = 10, 0.0
@@ -139,7 +137,7 @@ def test_change_track_status(viewer, db_session):
     mock_event.button = Mock(return_value=Qt.RightButton)  # Left mouse button
 
     # Perform the click
-    family_graph.onMouseClick(mock_event)
+    lineage_plot_canvas.on_mouse_click(mock_event)
 
     # Assert the expected outcome
     expected_status = True

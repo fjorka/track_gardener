@@ -1,6 +1,6 @@
 from qtpy.QtWidgets import QTabWidget
 
-from track_gardener.widget.widget_main import TrackGardener
+from track_gardener.widgets.widget_main import TrackGardener
 
 
 def test_main_creates_tabs(viewer):

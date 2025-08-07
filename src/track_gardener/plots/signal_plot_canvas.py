@@ -1,93 +1,114 @@
+"""A PyQtGraph widget for plotting cell signals and tags over time."""
+
+from typing import TYPE_CHECKING, Optional
+
 import numpy as np
-from pyqtgraph import GraphicsLayoutWidget, LegendItem, TextItem, mkPen
+from pyqtgraph import (
+    GraphicsLayoutWidget,
+    LegendItem,
+    PlotDataItem,
+    TextItem,
+    mkPen,
+)
 from qtpy.QtCore import Qt
 
 from track_gardener.db.db_model import CellDB
 
+if TYPE_CHECKING:
+    from napari import Viewer
+    from pyqtgraph import InfiniteLine, PlotDataItem
+    from qtpy.QtGui import QMouseEvent
+    from sqlalchemy.orm import Session
 
-class SignalGraph(GraphicsLayoutWidget):
+
+class SignalPlotCanvas(GraphicsLayoutWidget):
+    """A canvas for plotting cell signals against time.
+
+    Integrates with a napari viewer to display time-series data for
+    selected cell tracks from a database. It visualizes signals, displays
+    tags, and includes an interactive time cursor synced with the viewer.
+    """
+
     def __init__(
         self,
-        viewer,
-        session,
-        legend_on=True,
-        selected_signals=None,
-        color_list=None,
-        tag_dictionary=None,
-    ):
+        viewer: "Viewer",
+        session: "Session",
+        legend_on: bool = True,
+        selected_signals: Optional[list[str]] = None,
+        color_list: Optional[list[tuple[int, int, int]]] = None,
+        tag_dictionary: Optional[dict[str, str]] = None,
+    ) -> None:
+        """Initializes the SignalPlotCanvas.
+
+        Args:
+            viewer: The napari viewer instance.
+            session: The SQLAlchemy database session for querying data.
+            legend_on: If True, a legend is displayed on the plot.
+            selected_signals: A list of signal names to plot.
+            color_list: A list of RGB color tuples for the signal plots.
+            tag_dictionary: A mapping of tag names to their marker symbols.
+        """
         super().__init__()
 
         self.setContextMenuPolicy(Qt.NoContextMenu)
 
+        # --- Basic Attributes ---
         self.session = session
         self.viewer = viewer
         self.labels = self.viewer.layers["Labels"]
         self.legend_on = legend_on
         self.signal_list = selected_signals
         self.color_list = color_list
-        if tag_dictionary is None:
-            self.tag_dictionary = {}
-        else:
-            self.tag_dictionary = tag_dictionary
+        self.tag_dictionary = tag_dictionary if tag_dictionary else {}
 
-        # initialize graph
+        # --- Initialize Graph ---
         self.plot_view = self.addPlot(title="", labels={"bottom": "Time"})
-
-        self.t_max = self.viewer.dims.range[0][1]
-        self.plot_view.setXRange(0, self.t_max)
+        t_max = self.viewer.dims.range[0][1]
+        self.plot_view.setXRange(0, t_max)
         self.plot_view.setMouseEnabled(x=True, y=True)
         self.plot_view.setMenuEnabled(False)
-
-        # Connect the plotItem's mouse click event
-        self.plot_view.scene().sigMouseClicked.connect(self.onMouseClick)
-
         # add time line
         self.time_line = self.add_time_line()
 
-        # connect time slider event
+        # --- Connect Events ---
         self.viewer.dims.events.current_step.connect(self.update_time_line)
-
-        # connect label selection event
         self.labels.events.selected_label.connect(self.update_graph_all)
+        self.plot_view.scene().sigMouseClicked.connect(self.on_mouse_click)
 
-    def add_time_line(self):
-        """
-        Add a line to the graph that follows the time slider.
+    def add_time_line(self) -> "InfiniteLine":
+        """Adds a vertical line to the graph that follows the time slider.
+
+        Returns:
+            The created InfiniteLine object.
         """
         pen = mkPen(color=(255, 255, 255), xwidth=1)
         init_position = self.viewer.dims.current_step[0]
         time_line = self.plot_view.addLine(x=init_position, pen=pen)
-
         return time_line
 
-    def onMouseClick(self, event):
-        """
-        Mouse click event handler.
-        Left - selection of a time point in the movie.
-        """
-        vb = self.plot_view.vb
-        scene_coords = event.scenePos()
+    def on_mouse_click(self, event: "QMouseEvent") -> None:
+        """Handles mouse click events on the plot.
 
-        if self.plot_view.sceneBoundingRect().contains(scene_coords):
-            mouse_point = vb.mapSceneToView(scene_coords)
+        A left-click sets the napari viewer's time slider to the clicked
+        time point.
+
+        Args:
+            event: The mouse click event from the plot scene.
+        """
+        if (
+            self.plot_view.sceneBoundingRect().contains(event.scenePos())
+            and event.button() == Qt.LeftButton
+        ):
+
+            mouse_point = self.plot_view.vb.mapSceneToView(event.scenePos())
             x_val = mouse_point.x()
+            self.viewer.dims.set_point(0, round(x_val))
 
-            # left click - moving in time
-            if event.button() == Qt.LeftButton:
-                # move in time
-                self.viewer.dims.set_point(0, round(x_val))
+    def get_db_info(self) -> None:
+        """Queries the database for the currently active label.
 
-    def update_time_line(self):
-        """
-        Update of the time line when slider position is moved.
-        """
-        # line_position = event.value # that emitts warning for reasons that I don't understand
-        line_position = self.viewer.dims.current_step[0]
-        self.time_line.setValue(line_position)
-
-    def get_db_info(self):
-        """
-        Get information about the cell from the database.
+        Fetches time points, signals, and tags for the selected track ID,
+        storing the results in `self.query` and `self.active_label`.
         """
         # get a label or a persistent label
         if self.labels.selected_label > 0:
@@ -95,7 +116,6 @@ class SignalGraph(GraphicsLayoutWidget):
         else:
             self.active_label = int(self.labels.metadata["persistent_label"])
 
-        # get the info
         self.query = (
             self.session.query(CellDB.t, CellDB.signals, CellDB.tags)
             .filter(CellDB.track_id == self.active_label)
@@ -103,17 +123,13 @@ class SignalGraph(GraphicsLayoutWidget):
             .all()
         )
 
-    def redraw_tags(self):
-        """
-        Function that updates taggs on the graph.
-        """
+    def redraw_tags(self) -> None:
+        """Removes existing tags and draws updated ones on the plot."""
 
         # remove previous tags
-        items_to_remove = [
-            x for x in self.plot_view.items if isinstance(x, TextItem)
-        ]
-        for item in items_to_remove:
-            self.plot_view.removeItem(item)
+        for item in self.plot_view.items:
+            if isinstance(item, TextItem):
+                self.plot_view.removeItem(item)
 
         # reset view
         self.plot_view.enableAutoRange(
@@ -149,15 +165,13 @@ class SignalGraph(GraphicsLayoutWidget):
         else:
             self.viewer.status = "Error - no such label in the database."
 
-    def redraw_signals(self):
-        """
-        Function that updates signals on the graph.
-        """
+    def redraw_signals(self) -> None:
+        """Removes existing signals and plots updated ones."""
 
         # remove previous signals
-        items_to_remove = self.plot_view.items[1:]
-        for item in items_to_remove:
-            self.plot_view.removeItem(item)
+        for item in self.plot_view.items[1:]:
+            if isinstance(item, PlotDataItem):
+                self.plot_view.removeItem(item)
 
         if len(self.query) > 0:
             x_signal = [x[0] for x in self.query]
@@ -198,24 +212,23 @@ class SignalGraph(GraphicsLayoutWidget):
         else:
             self.viewer.status = "Error - no such label in the database."
 
-    def update_tags(self):
-        """
-        Update of the tags on the graph.
-        """
+    def update_time_line(self) -> None:
+        """Updates the time line position based on the viewer's slider."""
+        line_position = self.viewer.dims.current_step[0]
+        self.time_line.setValue(line_position)
+
+    def update_tags(self) -> None:
+        """Fetches the latest data and redraws only the tags."""
         self.get_db_info()
         self.redraw_tags()
 
-    def update_signals(self):
-        """
-        Update of the signals on the graph.
-        """
+    def update_signals(self) -> None:
+        """Fetches the latest data and redraws only the signals."""
         self.get_db_info()
         self.redraw_signals()
 
-    def update_graph_all(self):
-        """
-        Update of the signal display when a new label is selected.
-        """
+    def update_graph_all(self) -> None:
+        """Updates the entire graph when a new label is selected."""
         if self.labels.selected_label != 0:
             self.get_db_info()
             self.redraw_signals()

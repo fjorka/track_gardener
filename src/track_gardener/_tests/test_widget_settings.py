@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 from qtpy.QtWidgets import QPushButton
 
-from track_gardener.widget.widget_settings import SettingsWidget
+from track_gardener.widgets.widget_settings import SettingsWidget
 
 
 def test_open_yaml_dialog(viewer, mocker):
@@ -17,21 +17,21 @@ def test_open_yaml_dialog(viewer, mocker):
         return_value=("test.yaml", None),
     )
     validateConfigFile_mock = mocker.patch(
-        "track_gardener.widget.widget_settings.validateConfigFile",
+        "track_gardener.widgets.widget_settings.validateConfigFile",
         return_value=(True, ""),
     )
-    loadConfigFile_mock = mocker.patch(
-        "track_gardener.widget.widget_settings.SettingsWidget.loadConfigFile"
+    load_config_file_mock = mocker.patch(
+        "track_gardener.widgets.widget_settings.SettingsWidget.load_config_file"
     )
     reorganize_mock = mocker.patch(
-        "track_gardener.widget.widget_settings.SettingsWidget.reorganizeWidgets"
+        "track_gardener.widgets.widget_settings.SettingsWidget.reorganize_widgets"
     )
 
-    set_widget.openFileDialog()
+    set_widget.open_file_dialog()
 
     mock_getOpenFileName.assert_called_once()
     validateConfigFile_mock.assert_called_once_with("test.yaml")
-    loadConfigFile_mock.assert_called_once()
+    load_config_file_mock.assert_called_once()
     reorganize_mock.assert_called_once()
 
 
@@ -46,11 +46,11 @@ def test_experiment_loading(viewer, mocker):
     set_widget.labels_settings = {}
 
     mock_load_zarr = mocker.patch(
-        "track_gardener.widget.widget_settings.SettingsWidget.load_zarr"
+        "track_gardener.widgets.widget_settings.SettingsWidget.load_zarr"
     )
     mock_load_zarr.return_value = np.zeros((1, 10, 10))
 
-    set_widget.loadExperiment()
+    set_widget.load_experiment()
 
     # test number of image layers
     layer_im_num = len([x for x in viewer.layers if x._type_string == "image"])
@@ -76,11 +76,11 @@ def test_experiment_loading_multiscale(viewer, mocker):
     set_widget.labels_settings = {}
 
     mock_load_zarr = mocker.patch(
-        "track_gardener.widget.widget_settings.SettingsWidget.load_zarr"
+        "track_gardener.widgets.widget_settings.SettingsWidget.load_zarr"
     )
     mock_load_zarr.return_value = [np.zeros((1, 10, 10)), np.zeros((1, 5, 5))]
 
-    set_widget.loadExperiment()
+    set_widget.load_experiment()
 
     # test number of image layers
     layer_im_num = len([x for x in viewer.layers if x._type_string == "image"])
@@ -104,7 +104,7 @@ def test_yaml_loading(viewer):
     config_path = str(
         Path(__file__).parent / "fixtures" / "example_config.yaml"
     )
-    set_widget.loadConfigFile(config_path)
+    set_widget.load_config_file(config_path)
 
     assert (
         set_widget.experiment_name == "Test experiment"
@@ -136,20 +136,20 @@ def test_reorg_widgets(viewer, mocker):
     set_widget = SettingsWidget(viewer)
 
     mock_load_exp = mocker.patch(
-        "track_gardener.widget.widget_settings.SettingsWidget.loadExperiment"
+        "track_gardener.widgets.widget_settings.SettingsWidget.load_experiment"
     )
     mock_load_track = mocker.patch(
-        "track_gardener.widget.widget_settings.SettingsWidget.loadTracking"
+        "track_gardener.widgets.widget_settings.SettingsWidget.load_tracking"
     )
 
-    set_widget.reorganizeWidgets()
+    set_widget.reorganize_widgets()
 
     assert (
         mock_load_exp.called
-    ), "loadExperiment method should have been called"
+    ), "load_experiment method should have been called"
     assert (
         mock_load_track.called
-    ), "loadTracking method should have been called"
+    ), "load_tracking method should have been called"
 
     push_buttons_in_settings = [
         x.text() for x in set_widget.findChildren(QPushButton)

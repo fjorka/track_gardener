@@ -4,8 +4,8 @@ from qtpy.QtCore import Qt
 from qtpy.QtTest import QTest
 from qtpy.QtWidgets import QDialog, QPushButton
 
-from track_gardener.db.db_functions import newTrack_number
-from track_gardener.widget.widget_modifications import ModificationWidget
+from track_gardener.db.db_functions import get_new_track_id
+from track_gardener.widgets.widget_modifications import ModificationWidget
 
 
 def test_select_label_to_t_boxes(viewer, db_session):
@@ -58,7 +58,7 @@ def test_adding_new_track(qtbot, viewer, db_session):
 
     modification_widget = ModificationWidget(viewer, db_session)
 
-    new_track_id = newTrack_number(db_session)
+    new_track_id = get_new_track_id(db_session)
 
     modification_widget.new_track_function()
 
@@ -76,7 +76,7 @@ def test_cut_cell_function(qtbot, viewer, db_session):
 
     track_id = 207
     current_track = 20
-    new_track_id = newTrack_number(db_session)
+    new_track_id = get_new_track_id(db_session)
 
     modification_widget = ModificationWidget(viewer, db_session)
 
@@ -330,7 +330,7 @@ def test_connect_cell_function_clean_call_db(viewer, db_session, mocker):
     modification_widget.labels.selected_label = active_track
 
     mock_func_db = mocker.patch(
-        "track_gardener.widget.widget_modifications.fdb.integrate_trackDB"
+        "track_gardener.widgets.widget_modifications.fdb.integrate_trackDB"
     )
     mock_func_db.return_value = None, None
 
@@ -474,7 +474,7 @@ def test_mod_cell_function_deletion(viewer, db_session, mocker):
     modification_widget.labels.metadata["query"] = [mock_cell]
 
     mock_remove_db = mocker.patch(
-        "track_gardener.widget.widget_modifications.fdb.remove_CellDB"
+        "track_gardener.widgets.widget_modifications.fdb.remove_CellDB"
     )
 
     modification_widget.mod_cell_function()
@@ -499,7 +499,7 @@ def test_mod_cell_function_addition(viewer, db_session, mocker):
     modification_widget.labels.metadata["query"] = []
 
     mock_func_db = mocker.patch(
-        "track_gardener.widget.widget_modifications.fdb.add_new_CellDB"
+        "track_gardener.widgets.widget_modifications.fdb.add_new_CellDB"
     )
 
     modification_widget.mod_cell_function()
@@ -532,10 +532,10 @@ def test_mod_cell_function_modification(viewer, db_session, mocker):
     modification_widget.labels.metadata["query"] = [mock_cell]
 
     mock_func_db = mocker.patch(
-        "track_gardener.widget.widget_modifications.fdb.add_new_CellDB"
+        "track_gardener.widgets.widget_modifications.fdb.add_new_CellDB"
     )
     mock_remove_db = mocker.patch(
-        "track_gardener.widget.widget_modifications.fdb.remove_CellDB"
+        "track_gardener.widgets.widget_modifications.fdb.remove_CellDB"
     )
 
     modification_widget.mod_cell_function()
@@ -583,7 +583,7 @@ def test_tags_call_annotation(viewer, db_session, mocker):
     modification_widget.labels.selected_label = 204
 
     mock_func_db = mocker.patch(
-        "track_gardener.widget.widget_modifications.fdb.tag_cell"
+        "track_gardener.widgets.widget_modifications.fdb.toggle_cell_tag"
     )
     mock_func_db.return_value = "Test"
 

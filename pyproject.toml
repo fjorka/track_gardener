@@ -24,16 +24,17 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 dependencies = [
+    "dask",
+    "loguru",
+    "networkx",
     "numpy",
-    "magicgui",
+    "pyqtgraph",
+    "pyyaml",
     "qtpy",
     "scikit-image",
-    "pyqtgraph",
-    "pathlib",
-    "pyyaml",
     "sqlalchemy",
-    "dask",
-    "zarr",
+    "walkerlayout",
+    "zarr>3"
 ]
 
 [project.optional-dependencies]

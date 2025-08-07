@@ -6,10 +6,10 @@ from sqlalchemy.orm import sessionmaker
 from track_gardener.db.db_model import NO_PARENT, Base, CellDB, TrackDB
 from track_gardener.db.db_validate import (
     build_track_graph,
-    check_column_existence,
-    check_orphan_cells,
-    check_table_existence,
-    check_unused_tracks,
+    check_columns_present,
+    check_no_orphan_cells,
+    check_no_orphan_tracks,
+    check_tables_present,
 )
 
 
@@ -38,56 +38,56 @@ def add_tracks_cells(session):
     return (t1, t2, t3), (c1, c2)
 
 
-def test_check_table_existence_exists(session):
-    errors = check_table_existence(session, [CellDB, TrackDB])
+def test_check_tables_present_exists(session):
+    errors = check_tables_present(session, [CellDB, TrackDB])
     assert errors == []
 
 
-def test_check_table_existence_missing(session):
+def test_check_tables_present_missing(session):
     Base.metadata.tables["tracks"].drop(session.bind)
-    errors = check_table_existence(session, [CellDB, TrackDB])
+    errors = check_tables_present(session, [CellDB, TrackDB])
     assert errors
     assert "tracks" in errors[0]
 
 
-def test_check_column_existence_ok(session):
+def test_check_columns_present_ok(session):
     print("CellDB __table__ exists:", hasattr(CellDB, "__table__"))
-    errors = check_column_existence(session, [CellDB, TrackDB])
+    errors = check_columns_present(session, [CellDB, TrackDB])
     assert errors == []
 
 
-def test_check_orphan_cells(session, add_tracks_cells):
+def test_check_no_orphan_cells(session, add_tracks_cells):
     # Remove track 2, so cell c2 becomes orphaned
     session.query(TrackDB).filter(TrackDB.track_id == 2).delete()
     session.commit()
-    errors = check_orphan_cells(session)
+    errors = check_no_orphan_cells(session)
     assert errors
     assert (
         "Orphaned cells found" in errors[0]
     ), f"Expected orphaned cells error, got: {errors[0]}"
 
 
-def test_check_orphan_cells_none(session, add_tracks_cells):
-    errors = check_orphan_cells(session)
+def test_check_no_orphan_cells_none(session, add_tracks_cells):
+    errors = check_no_orphan_cells(session)
     assert errors == []
 
 
-def test_check_unused_tracks(session, add_tracks_cells):
+def test_check_no_orphan_tracks(session, add_tracks_cells):
     """
     Fixture provides a track without cells.
     """
 
-    errors = check_unused_tracks(session)
+    errors = check_no_orphan_tracks(session)
     assert errors == ["Tracks with no associated cells: [Track 3 from 0 to 3]"]
 
 
-def test_check_unused_tracks_none(session):
+def test_check_no_orphan_tracks_none(session):
     # Add a track and associated cell
     t1 = TrackDB(track_id=1, parent_track_id=None, root=1, t_begin=0, t_end=5)
     c1 = CellDB(track_id=1, t=0, id=100, row=0, col=0)
     session.add_all([t1, c1])
     session.commit()
-    errors = check_unused_tracks(session)
+    errors = check_no_orphan_tracks(session)
     assert errors == []
 
 

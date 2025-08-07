@@ -1,3 +1,12 @@
+"""A napari widget for creating and configuring time-series signal plots.
+
+This module defines the `SignalPlotControlPanel`, a QWidget that provides a user
+interface for dynamically building graphs. Users can add or remove plot lines,
+assign a specific signal from a dropdown menu to each line, and choose a unique
+color. The widget then drives an underlying plotting canvas to visualize the
+selected signals over time for a given cell track.
+"""
+
 from typing import TYPE_CHECKING, Any
 
 from qtpy.QtWidgets import (
@@ -10,14 +19,14 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from track_gardener.graph.signal_graph import SignalGraph
+from track_gardener.plots.signal_plot_canvas import SignalPlotCanvas
 
 if TYPE_CHECKING:
     from napari.viewer import Viewer
     from sqlalchemy.orm import Session
 
 
-class CellGraphWidget(QWidget):
+class SignalPlotControlPanel(QWidget):
     """A widget for creating and managing a signal graph plot.
 
     This widget allows users to dynamically add, remove, and configure
@@ -35,7 +44,7 @@ class CellGraphWidget(QWidget):
         color_sel_list: list[str] | None = None,
         tag_dictionary: dict[str, Any] | None = None,
     ) -> None:
-        """Initializes the CellGraphWidget.
+        """Initializes the SignalPlotControlPanel.
 
         Args:
             napari_viewer (Viewer): The napari viewer instance.
@@ -75,7 +84,7 @@ class CellGraphWidget(QWidget):
             self.color_sel_list = None
 
         # add graph
-        self.graph = self.add_signal_graph()
+        self.graph = self.add_signal_plot_canvas()
 
         # add matching buttons
         if (self.signal_sel_list is None) or (len(self.signal_sel_list) == 0):
@@ -279,13 +288,13 @@ class CellGraphWidget(QWidget):
         # update what is displayed
         self.on_selection()
 
-    def add_signal_graph(self) -> SignalGraph:
+    def add_signal_plot_canvas(self) -> SignalPlotCanvas:
         """Adds the signal graph widget to the main layout.
 
         Returns:
-            SignalGraph: The instance of the created graph widget.
+            SignalPlotCanvas: The instance of the created graph widget.
         """
-        graph_widget = SignalGraph(
+        graph_widget = SignalPlotCanvas(
             self.viewer,
             self.session,
             legend_on=False,

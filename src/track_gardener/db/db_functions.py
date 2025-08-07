@@ -1,63 +1,90 @@
+"""A collection of functions to manipulate cell and track data in the database.
+
+This module provides an API for common track editing operations, such as
+creating, deleting, cutting, merging, and connecting tracks. It also includes
+functions for managing individual cells, notes, and tags.
+"""
+
 from copy import deepcopy
+from typing import TYPE_CHECKING, Callable, Sequence
 
 import dask.array as da
-import numpy as np
-from skimage.morphology import binary_dilation, disk
+import networkx as nx
 from sqlalchemy import and_, func
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm.attributes import flag_modified
 
-from track_gardener.db.db_model import CellDB, TrackDB
+from track_gardener.db.db_model import NO_PARENT, CellDB, TrackDB
+
+if TYPE_CHECKING:
+    from skimage.measure._regionprops import RegionProperties
+    from sqlalchemy.orm import Session
 
 
-def newTrack_number(session):
+def get_new_track_id(session: "Session") -> int:
+    """Gets the next available track ID.
+
+    This is determined by finding the maximum existing track ID and adding one.
+
+    Args:
+        session ("Session"): The SQLAlchemy session connected to the database.
+
+    Returns:
+        int: The new, unique track ID.
     """
-    input:
-        - session
-    output:
-        - number of the new track
-        - in the future consider getting first unused if fast enough
-    """
-
     max_id = session.query(func.max(TrackDB.track_id)).scalar() or 0
 
     return max_id + 1
 
 
-def newCell_number(session):
-    """
-    input:
-        - session
-    output:
-        - number of the new cell
-        - in the future consider getting first unused if fast enough
-    """
+def get_new_cell_id(session: "Session") -> int:
+    """Gets the next available unique cell ID.
 
+    This is determined by finding the maximum existing cell ID and adding one.
+
+    Args:
+        session ("Session"): The SQLAlchemy session connected to the database.
+
+    Returns:
+        int: The new, unique cell ID.
+    """
     max_id = session.query(func.max(CellDB.id)).scalar() or 0
-
     return max_id + 1
 
 
-def get_signals(session):
-    """
-    Function to get signal names from the database.
+def get_signals(session: "Session") -> list[str]:
+    """Gets a list of all signal names from the database.
+
+    It inspects the 'signals' JSON field of the first available cell.
+
+    Args:
+        session ("Session"): The SQLAlchemy session connected to the database.
+
+    Returns:
+        list[str]: A list of signal names (keys in the signals dictionary).
     """
     example_cell = session.query(CellDB).first()
+    if not example_cell:
+        return []
     signal_list = list(example_cell.signals.keys())
-
     return signal_list
 
 
-def get_descendants(session, active_label):
-    """
-    Function to recursively get all descendants of a given label.
-    input:
-        session
-        active_label - label for which we want to get descendants
-    output:
-        descendants - list of descendants as row objects (not modifyable)
+def get_descendants(
+    session: "Session", active_label: int
+) -> Sequence[TrackDB]:
+    """Recursively gets all descendants of a given track, including itself.
+
+    Args:
+        session ("Session"): The SQLAlchemy session connected to the database.
+        active_label (int): The track_id to start the search from.
+
+    Returns:
+        Sequence[TrackDB]: A list of TrackDB objects representing the full
+            lineage descending from the active_label.
     """
 
+    # Create a recursive Common Table Expression (CTE)
     cte = (
         session.query(TrackDB)
         .filter(TrackDB.track_id == active_label)
@@ -66,71 +93,75 @@ def get_descendants(session, active_label):
 
     cte_alias = aliased(cte, name="cte_alias")
 
+    # Define the recursive part of the CTE
     cte = cte.union_all(
         session.query(TrackDB).filter(
             TrackDB.parent_track_id == cte_alias.c.track_id
         )
     )
 
-    # Join the CTE with TrackDB to get full TrackDB objects
+    # Query all tracks that are part of the recursive hierarchy
     descendants = (
         session.query(TrackDB)
         .join(cte, TrackDB.track_id == cte.c.track_id)
         .all()
     )
-
     return descendants
 
 
-def delete_trackDB(session, active_label):
-    """
-    Function to delete a track from trackDB.
-    input:
-        session
-        active_label - label for which the track is cut
-    """
+def delete_trackDB(session: "Session", active_label: int) -> str:
+    """Deletes a track and detaches its direct children.
 
-    # get the acual track and check what will be done
+    This function deletes the specified track. Any direct children of the
+    deleted track become new root tracks.
+
+    Args:
+        session ("Session"): The SQLAlchemy session connected to the database.
+        active_label (int): The track_id of the track to delete.
+
+    Returns:
+        str: A status message indicating the result of the operation.
+    """
     record = session.query(TrackDB).filter_by(track_id=active_label).first()
-
-    # if the track is found
     if record is not None:
-        # process descendants
+        # Process descendants to detach children
         descendants = get_descendants(session, active_label)
         for track in [x for x in descendants if x.track_id != active_label]:
             if track.parent_track_id == active_label:
                 cut_trackDB(session, track.track_id, track.t_begin)
-
-        # delete the track
+        # Delete the track itself
         session.delete(record)
-
         session.commit()
-
         status = f"Track {active_label} has been deleted."
-
     else:
         status = "Track not found"
-
     return status
 
 
-def cut_trackDB(session, active_label, current_frame):
-    """
-    Function to cut a track in trackDB.
-    input:
-        session
-        active_label - label for which the track is cut
-        current_frame - current time point
-    output:
-        mitosis - True if the track is cut from mitosis
-        new_track - number of the new track if the track is cut in the middle
+def cut_trackDB(
+    session: "Session", active_label: int, current_frame: int
+) -> tuple[bool, int | None]:
+    """Cuts a track at a specific frame.
+
+    This can result in two outcomes:
+    1.  If cut at its start (`t_begin`), the track is detached from its parent.
+    2.  If cut in the middle, the track is truncated, and a new track is
+        created for the subsequent cells.
+
+    Args:
+        session ("Session"): The SQLAlchemy session connected to the database.
+        active_label (int): The ID of the track to cut.
+        current_frame (int): The frame at which to perform the cut.
+
+    Returns:
+        tuple[bool, int | None]: A tuple containing:
+            - mitosis (bool): True if the cut resulted in detachment from a parent.
+            - new_track (int | None): The ID of the new track created, if any.
     """
 
-    # get the acual track and check what will be done
     record = session.query(TrackDB).filter_by(track_id=active_label).first()
 
-    # if cut is called beyond the scope of a track
-    # by accident cut on the first object of a track and it's a starting track
+    # Handle cases where the cut is invalid or has no effect
     if (
         (record.t_end < current_frame)
         or (record.t_begin > current_frame)
@@ -139,32 +170,21 @@ def cut_trackDB(session, active_label, current_frame):
             and (record.t_begin == current_frame)
         )
     ):
-        new_track = None
-        mitosis = False
+        return False, None
 
-    # cutting from mitosis
+    # Case 1: Cutting from a parent (detaching at t_begin)
     elif (record.parent_track_id > -1) and (record.t_begin == current_frame):
         record.parent_track_id = -1
-
-        # process descendants
         descendants = get_descendants(session, active_label)
-
         for track in descendants:
             track.root = active_label
-
-        # indicate no new track
-        new_track = None
-        mitosis = True
-
         session.commit()
+        return True, None
 
-    # there is a true cut
+    # Case 2: Splitting a track in the middle
     elif record.t_begin < current_frame:
-
-        # modify the end of the track
         org_t_end = record.t_end
-
-        # account for a situation when it's a gap around the cut
+        # Find the precise start/end times around the gap to handle sparse tracks
         cells_t = (
             session.query(CellDB.t).filter_by(track_id=active_label).all()
         )
@@ -174,9 +194,8 @@ def cut_trackDB(session, active_label, current_frame):
         t_stop = max([cell[0] for cell in cells_t if cell[0] < current_frame])
         record.t_end = t_stop
 
-        # add completely new track
-        new_track = newTrack_number(session)
-
+        # Create a new track for the second part
+        new_track = get_new_track_id(session)
         track = TrackDB(
             track_id=new_track,
             parent_track_id=-1,
@@ -184,37 +203,30 @@ def cut_trackDB(session, active_label, current_frame):
             t_begin=t_start,
             t_end=org_t_end,
         )
-
         session.add(track)
 
-        # process descendants
+        # Update descendants to point to the new track where appropriate
         descendants = get_descendants(session, active_label)
-
         for track in [x for x in descendants if x.track_id != active_label]:
-            # change the value of the root track
             track.root = new_track
-
-            # change for children
             if track.parent_track_id == active_label:
                 track.parent_track_id = new_track
-
-        mitosis = False
         session.commit()
-
+        return False, new_track
     else:
-        raise ValueError("Track situation unaccounted for")
-
-    return mitosis, new_track
+        raise ValueError("Track cutting scenario is not accounted for.")
 
 
-def _merge_t2(session, t2, t1, current_frame):
+def _merge_t2(
+    session: "Session", t2: TrackDB, t1: TrackDB, current_frame: int
+) -> None:
     """
-    Function to cut a track in trackDB.
-    This function is not touching merge_to
-    input:
-        session
-        active_label - label for which the track is cut
-        current_frame - current time point
+    Helper to merge track t2 into t1.
+    Args:
+        session ("Session"): The SQLAlchemy session.
+        t2 (TrackDB): The secondary track (child/absorbed).
+        t1 (TrackDB): The ID of the primary track (parent/absorber).
+        current_frame (int): The frame where the t2 will start in mitosis.
     """
 
     # process descendants
@@ -240,21 +252,22 @@ def _merge_t2(session, t2, t1, current_frame):
     session.commit()
 
 
-def _connect_t2(session, t2, t1, current_frame):
+def _connect_t2(
+    session: "Session", t2: TrackDB, t1: TrackDB, current_frame: int
+) -> int | None:
     """
-    Function to connect t2 as an offspring of t1.
-    This function is not touching merge_to
-    input:
-        session
-        t2 - offsprint track
-        t1 - parent track
-        current_frame - frame were t2 will be starting from mitosis
+    Helper to connect t2 as a child of t1.
+    Args:
+        session ("Session"): The SQLAlchemy session.
+        t2 (TrackDB): The secondary track (child/absorbed).
+        t1 (TrackDB): The ID of the primary track (parent/absorber).
+        current_frame (int): The frame where the t2 will start in mitosis.
     """
 
     # if there is a remaining part at the beginning
     if t2.t_begin < current_frame:
         # create a new track
-        new_track = newTrack_number(session)
+        new_track = get_new_track_id(session)
 
         # check if the t2_before needs to become its own root
         new_root = new_track if t2.root == t2.track_id else deepcopy(t2.root)
@@ -291,19 +304,25 @@ def _connect_t2(session, t2, t1, current_frame):
     return new_track
 
 
-def integrate_trackDB(session, operation, t1_ind, t2_ind, current_frame):
-    """
-    Function to merge or connect two tracks in trackDB.
-    For the opperation to happen t1 has to exist on current_frame - 1 time point
-    input:
-        session
-        operation - "merge" or "connect"
-        t1_ind - label of the first track
-        t2_ind - label of the second track
-        current_frame - current time point
-    output:
-        t1_after - label of the new track if t1 is cut
-        t2_before - label of the new track if t2 is cut
+def integrate_trackDB(
+    session: "Session",
+    operation: str,
+    t1_ind: int,
+    t2_ind: int,
+    current_frame: int,
+) -> tuple[int | None, int | None]:
+    """Merges or connects two tracks.
+
+    Args:
+        session ("Session"): The SQLAlchemy session.
+        operation (str): The operation to perform ("merge" or "connect").
+        t1_ind (int): The ID of the primary track (parent/absorber).
+        t2_ind (int): The ID of the secondary track (child/absorbed).
+        current_frame (int): The frame where the integration occurs.
+
+    Returns:
+        tuple[int | None, int | None]: A tuple containing the new track IDs
+            created from splitting t1 and t2, respectively.
     """
 
     # get tracks of interest
@@ -355,15 +374,26 @@ def integrate_trackDB(session, operation, t1_ind, t2_ind, current_frame):
     return t1_after, t2_before
 
 
-def cellsDB_after_trackDB(
-    session, active_label, current_frame, new_track, direction="after"
-):
-    """
+def update_cellsDB_after_trackDB(
+    session: "Session",
+    active_label: int,
+    current_frame: int,
+    new_track: int | None,
+    direction: str = "after",
+) -> None:
+    """Updates cells after a track has been modified.
 
-    input:
-        session
-        active_label - label for which the track is cut
-        current_frame - current time point
+    This function reassigns or deletes cells based on a track operation
+    (e.g., a cut).
+
+    Args:
+        session ("Session"): The SQLAlchemy session.
+        active_label (int): The original track ID.
+        current_frame (int): The frame of the track modification.
+        new_track (int | None): The ID of the new track to assign cells to.
+            If None, the cells will be deleted.
+        direction (str): A filter for which cells to affect: "after",
+            "before", or "all". Defaults to "after".
     """
 
     # query CellDB
@@ -409,11 +439,18 @@ def cellsDB_after_trackDB(
     session.commit()
 
 
-def trackDB_after_cellDB(session, cell_id, current_frame):
-    """
-    Function to deal with tracks upon cell removal/adding
-    cell_id - id of the removed cell
-    current_frame
+def update_trackDB_after_cellDB(
+    session: "Session", cell_id: int, current_frame: int
+) -> None:
+    """Updates a track's time span after a cell is added or removed.
+
+    Ensures that `t_begin` and `t_end` of a track accurately reflect the
+    min and max timepoints of its associated cells.
+
+    Args:
+        session ("Session"): The SQLAlchemy session.
+        cell_id (int): The track ID of the cell that was modified.
+        current_frame (int): The frame of the modification.
     """
 
     track = session.query(TrackDB).filter(TrackDB.track_id == cell_id).first()
@@ -471,41 +508,47 @@ def trackDB_after_cellDB(session, cell_id, current_frame):
     session.commit()
 
 
-def remove_CellDB(session, cell_id, current_frame):
-    """
-    Function to remove a cell from the database.
-    """
+def remove_CellDB(
+    session: "Session", cell_id: int, current_frame: int
+) -> None:
+    """Removes a cell from the database and updates its track.
 
+    Args:
+        session ("Session"): The SQLAlchemy session.
+        cell_id (int): The track ID of the cell to remove.
+        current_frame (int): The frame of the cell to remove.
+    """
     cell = (
         session.query(CellDB)
-        .filter(CellDB.track_id == cell_id)
-        .filter(CellDB.t == current_frame)
+        .filter(CellDB.track_id == cell_id, CellDB.t == current_frame)
         .first()
     )
-
     if cell is not None:
-
         session.delete(cell)
         session.commit()
-
-        # deal with the tracks
-        trackDB_after_cellDB(session, cell_id, current_frame)
-
+        update_trackDB_after_cellDB(session, cell_id, current_frame)
     else:
         print("Cell not found")
 
 
-def add_new_core_CellDB(session, current_frame, cell):
-    """
-    session
-    current_frame
-    cell - regionprops format cell
+def create_CellDB_core(
+    session: "Session", current_frame: int, cell: "RegionProperties"
+) -> CellDB:
+    """Creates a core CellDB object from regionprops data.
+
+    Args:
+        session ("Session"): The SQLAlchemy session.
+        current_frame (int): The frame of the new cell.
+        cell ("RegionProperties"): The cell data from scikit-image regionprops.
+
+    Returns:
+        CellDB: The newly created (but not yet complete) CellDB object.
     """
 
     # start the object
 
     # new object starts with a new id because id enforces uniqueness
-    new_id = newCell_number(session)
+    new_id = get_new_cell_id(session)
     cell_db = CellDB(id=new_id, t=current_frame, track_id=cell.label)
 
     cell_db.row = int(cell.centroid[0])
@@ -525,18 +568,25 @@ def add_new_core_CellDB(session, current_frame, cell):
 
 
 def add_new_CellDB(
-    session,
-    current_frame,
-    cell,
-    modified=True,
-    ch_list=None,
-    signal_function=None,
-):
-    """
-    Function to add a complete cell
+    session: "Session",
+    current_frame: int,
+    cell: "RegionProperties",
+    modified: bool = True,
+    ch_list: list[da.Array] | None = None,
+    signal_function: Callable | None = None,
+) -> None:
+    """Adds a complete cell with signals and tags to the database.
+
+    Args:
+        session ("Session"): The SQLAlchemy session.
+        current_frame (int): The frame of the new cell.
+        cell ("RegionProperties"): The cell data from scikit-image regionprops.
+        modified (bool): Whether to tag the cell as 'modified'. Defaults to True.
+        ch_list (list[da.Array] | None): List of dask arrays for signal extraction.
+        signal_function (Callable | None): Function to calculate signals.
     """
 
-    cell_db = add_new_core_CellDB(session, current_frame, cell)
+    cell_db = create_CellDB_core(session, current_frame, cell)
 
     # add signals to the cell
     if signal_function is not None:
@@ -553,13 +603,19 @@ def add_new_CellDB(
 
     session.commit()
 
-    # deal with the tracks
-    trackDB_after_cellDB(session, cell_db.track_id, current_frame)
+    # Update the corresponding track
+    update_trackDB_after_cellDB(session, cell_db.track_id, current_frame)
 
 
-def get_track_note(session, active_label):
-    """
-    Function to retrieve the free format note for a given track.
+def get_track_note(session: "Session", active_label: int) -> str | None:
+    """Retrieves the note for a given track.
+
+    Args:
+        session ("Session"): The SQLAlchemy session.
+        active_label (int): The ID of the track.
+
+    Returns:
+        str | None: The note string, or None if the track is not found.
     """
 
     query = session.query(TrackDB).filter_by(track_id=active_label).first()
@@ -570,9 +626,16 @@ def get_track_note(session, active_label):
     return query.notes
 
 
-def save_track_note(session, active_label, note):
-    """
-    Save a given note to the track in the database.
+def save_track_note(session: "Session", active_label: int, note: str) -> str:
+    """Saves a note for a given track.
+
+    Args:
+        session ("Session"): The SQLAlchemy session.
+        active_label (int): The ID of the track.
+        note (str): The note content to save.
+
+    Returns:
+        str: A status message.
     """
 
     track = session.query(TrackDB).filter_by(track_id=active_label).first()
@@ -590,9 +653,19 @@ def save_track_note(session, active_label, note):
     return sts
 
 
-def tag_cell(session, active_cell, frame, annotation):
-    """
-    Function to give a tag to a cell in the CellDB table.
+def toggle_cell_tag(
+    session: "Session", active_cell: int, frame: int, annotation: str
+) -> str:
+    """Toggles a boolean tag for a specific cell.
+
+    Args:
+        session ("Session"): The SQLAlchemy session.
+        active_cell (int): The track ID of the cell.
+        frame (int): The timepoint of the cell.
+        annotation (str): The name of the tag to toggle.
+
+    Returns:
+        str: A status message.
     """
 
     cell_list = (
@@ -624,68 +697,40 @@ def tag_cell(session, active_cell, frame, annotation):
     return sts
 
 
-def ring_intensity(cell, t, ch_data_list, kwargs):
+def get_tracks_nx_from_root(session: "Session", root_id: int) -> nx.DiGraph:
     """
-    Function to calculate ring intensity.
-    input:
-        ch_data_list: list of signals (t,row,col)
+    Builds a NetworkX graph directly from a database query in a single pass.
 
-    output:
-        list of ring intensities for each channel
+    Args:
+        session ("Session"): The SQLAlchemy database session.
+        root_id (int): The root ID of the track family to build.
+
+    Returns:
+        nx.DiGraph: A directed graph representing the lineage tree.
     """
-    # get the ring width
-    ring_width = kwargs.get("ring_width", 5)
-
-    image_shape = ch_data_list[0].shape
-
-    min_row, min_col, max_row, max_col = cell.bbox
-
-    min_row_padded = max(min_row - ring_width, 0)
-    min_col_padded = max(min_col - ring_width, 0)
-    max_row_padded = min(max_row + ring_width, image_shape[1])
-    max_col_padded = min(max_col + ring_width, image_shape[2])
-
-    # Dimensions of the padded region
-    padded_rows = max_row_padded - min_row_padded
-    padded_cols = max_col_padded - min_col_padded
-
-    # create a mask
-    cell_mask_padded = np.zeros((padded_rows, padded_cols), dtype=bool)
-    # Calculate the position of the original cell mask within the padded mask
-    mask_row_start = min_row - min_row_padded
-    mask_row_end = mask_row_start + (max_row - min_row)
-    mask_col_start = min_col - min_col_padded
-    mask_col_end = mask_col_start + (max_col - min_col)
-
-    # Place the original cell mask into the padded cell mask
-    cell_mask_padded[
-        mask_row_start:mask_row_end, mask_col_start:mask_col_end
-    ] = cell.image
-
-    # Dilate the cell mask to create the outer boundary (ring)
-    dilated_mask = binary_dilation(
-        cell_mask_padded, footprint=disk(ring_width)
+    # Fetch all relevant tracks
+    family_tracks = (
+        session.query(TrackDB).filter(TrackDB.root == root_id).all()
     )
 
-    # Create the ring mask by subtracting the original mask from the dilated mask
-    ring_mask = dilated_mask & (~cell_mask_padded)
+    # Return an empty graph if no data
+    if not family_tracks:
+        return nx.DiGraph()
 
-    signal_list = []
-    # Extract the signal region corresponding to the padded bounding box
-    for signal_cube in ch_data_list:
-        signal_roi = signal_cube[
-            t, min_row_padded:max_row_padded, min_col_padded:max_col_padded
-        ]
+    # Initialize the graph
+    G = nx.DiGraph()
 
-        # Extract the signal values within the ring
-        signal_in_ring = signal_roi[ring_mask]
+    # Iterate through results once to build the graph
+    for track in family_tracks:
+        G.add_node(
+            track.track_id,
+            start=track.t_begin,
+            stop=track.t_end,
+            accepted=track.accepted_tag,
+        )
 
-        # Compute the desired statistic (e.g., mean or sum)
-        ring_signal_mean = signal_in_ring.mean()
+        # If the track has a parent, create an edge
+        if track.parent_track_id is not NO_PARENT:
+            G.add_edge(track.parent_track_id, track.track_id)
 
-        if isinstance(ring_signal_mean, da.core.Array):
-            ring_signal_mean = ring_signal_mean.compute()
-
-        signal_list.append(ring_signal_mean)
-
-    return signal_list
+    return G

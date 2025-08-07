@@ -1,3 +1,13 @@
+"""A napari widget for efficient navigation and visualization of tracked cells.
+
+This module defines the `TrackNavigationWidget`, a QWidget responsible for
+rendering cell segmentation masks from a database onto the napari canvas. It
+optimizes performance by dynamically querying only the data visible in the
+current field of view and debouncing updates during rapid camera movement.
+It also provides UI controls for track navigation (e.g., go to start/end)
+and a "follow" mode to keep a selected track centered during time-lapse playback.
+"""
+
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -130,7 +140,14 @@ class TrackNavigationWidget(QWidget):
 
             # check which cell was clicked
             # within the labels layer data
-            myTrackNum = self.labels.data[r, c]
+            if (r < self.labels.data.shape[0]) and (
+                c < self.labels.data.shape[1]
+            ):
+                myTrackNum = self.labels.data[r, c]
+
+            # set to background if clicked outside of the rendered labels layer
+            else:
+                myTrackNum = 0
 
             # set track as active
             self.labels.selected_label = int(myTrackNum)

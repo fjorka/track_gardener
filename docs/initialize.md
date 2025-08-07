@@ -1,3 +1,0 @@
-# Usage
-
-Track Gardener is ...

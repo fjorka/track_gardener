@@ -4,21 +4,21 @@ import pyqtgraph as pg
 from qtpy.QtCore import QPointF, Qt
 
 import track_gardener.db.db_functions as fdb
-from track_gardener.graph.signal_graph import SignalGraph
+from track_gardener.plots.signal_plot_canvas import SignalPlotCanvas
 
 
-def test_init_signal_graph(viewer, db_session):
+def test_init_signal_plot_canvas(viewer, db_session):
     """
     Test signal graph initialization.
     """
 
-    signal_graph = SignalGraph(viewer=viewer, session=db_session)
+    signal_plot_canvas = SignalPlotCanvas(viewer=viewer, session=db_session)
 
-    assert signal_graph.legend_on
-    assert signal_graph.signal_list is None
-    assert signal_graph.color_list is None
-    assert signal_graph.tag_dictionary == {}
-    assert signal_graph.plot_view is not None
+    assert signal_plot_canvas.legend_on
+    assert signal_plot_canvas.signal_list is None
+    assert signal_plot_canvas.color_list is None
+    assert signal_plot_canvas.tag_dictionary == {}
+    assert signal_plot_canvas.plot_view is not None
 
 
 def test_time_line(viewer, db_session):
@@ -26,17 +26,17 @@ def test_time_line(viewer, db_session):
     Test a time line to the signal graph.
     """
 
-    signal_graph = SignalGraph(viewer=viewer, session=db_session)
+    signal_plot_canvas = SignalPlotCanvas(viewer=viewer, session=db_session)
 
-    assert signal_graph.time_line is not None
-    assert signal_graph.time_line.value() == viewer.dims.current_step[0]
+    assert signal_plot_canvas.time_line is not None
+    assert signal_plot_canvas.time_line.value() == viewer.dims.current_step[0]
 
     # move the slider of the viewer
     viewer.dims.set_point(0, 10)
 
     assert (
-        signal_graph.time_line.value() == 10
-    ), "Expected to get a time line at 10, instead got {signal_graph.time_line.value()}"
+        signal_plot_canvas.time_line.value() == 10
+    ), "Expected to get a time line at 10, instead got {signal_plot_canvas.time_line.value()}"
 
 
 def test_mouse_click(viewer, db_session):
@@ -44,12 +44,12 @@ def test_mouse_click(viewer, db_session):
     Test mouse click event on the signal graph.
     """
 
-    signal_graph = SignalGraph(viewer=viewer, session=db_session)
+    signal_plot_canvas = SignalPlotCanvas(viewer=viewer, session=db_session)
 
     # set up a mock event
 
     # Set up a mock event with proper coordinate translation
-    vb = signal_graph.plot_view.vb
+    vb = signal_plot_canvas.plot_view.vb
 
     # Desired data coordinates
     data_x, data_y = 20, 0.0
@@ -62,12 +62,12 @@ def test_mouse_click(viewer, db_session):
     mock_event.scenePos = Mock(return_value=scene_point)
     mock_event.button = Mock(return_value=Qt.LeftButton)  # Left mouse button
 
-    signal_graph.onMouseClick(mock_event)
+    signal_plot_canvas.on_mouse_click(mock_event)
 
     # assert position of the line
     assert (
-        signal_graph.time_line.value() == data_x
-    ), f"Expected to get a time line at {data_x}, instead got {signal_graph.time_line.value()}"
+        signal_plot_canvas.time_line.value() == data_x
+    ), f"Expected to get a time line at {data_x}, instead got {signal_plot_canvas.time_line.value()}"
 
     # assert position of the viewer
     assert (
@@ -80,7 +80,7 @@ def test_ploting_cell(viewer, db_session):
     Test plotting a cell on the signal graph.
     """
 
-    signal_graph = SignalGraph(
+    signal_plot_canvas = SignalPlotCanvas(
         viewer=viewer,
         session=db_session,
         selected_signals=["area"],
@@ -90,7 +90,7 @@ def test_ploting_cell(viewer, db_session):
     viewer.layers["Labels"].selected_label = 204
 
     assert (
-        signal_graph.query is not None
+        signal_plot_canvas.query is not None
     ), "Expected to get a query after selecting a new object."
 
 
@@ -99,7 +99,7 @@ def test_plotting_non_existent_cell(viewer, db_session):
     Test plotting a non-existent cell on the signal graph.
     """
 
-    signal_graph = SignalGraph(  # noqa: F841
+    signal_plot_canvas = SignalPlotCanvas(  # noqa: F841
         viewer=viewer,
         session=db_session,
         selected_signals=["area"],
@@ -120,7 +120,7 @@ def test_using_tags(viewer, db_session):
     Test using tags on the signal graph.
     """
 
-    signal_graph = SignalGraph(
+    signal_plot_canvas = SignalPlotCanvas(
         viewer=viewer,
         session=db_session,
         selected_signals=["area"],
@@ -133,7 +133,7 @@ def test_using_tags(viewer, db_session):
     annotation = "apoptosis"
 
     # add annotation to the cell
-    _ = fdb.tag_cell(db_session, active_cell, frame, annotation)
+    _ = fdb.toggle_cell_tag(db_session, active_cell, frame, annotation)
 
     # select the cell
     viewer.layers["Labels"].selected_label = active_cell
@@ -141,7 +141,7 @@ def test_using_tags(viewer, db_session):
     # assert the tag is printed on the graph
     text_items = [
         item
-        for item in signal_graph.plot_view.items
+        for item in signal_plot_canvas.plot_view.items
         if isinstance(item, pg.TextItem)
     ]
     assert any(
