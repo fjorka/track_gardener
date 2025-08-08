@@ -122,7 +122,9 @@ class SettingsWidget(QWidget):
 
         # get logo image
         logo_path = (
-            Path(__file__).parent.parent / "icons" / "track_gardener_logo.png"
+            Path(__file__).parent.parent
+            / "icons"
+            / "track_gardener_logo_transparent.png"
         )
         # logo_path = r'../icons/track_gardener_logo.png'
         logo = QPixmap(str(logo_path))
