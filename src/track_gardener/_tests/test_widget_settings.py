@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 import numpy as np
 from qtpy.QtWidgets import QPushButton
 
+from ..config.models import SignalChannel
 from ..config.pipeline import load_and_validate_config
 from ..widgets.widget_settings import SettingsWidget
 
@@ -46,7 +47,10 @@ def test_experiment_loading(viewer, mocker):
     """
     set_widget = SettingsWidget(viewer)
 
-    set_widget.channels_list = [{"path": "test1.zarr"}, {"path": "test2.zarr"}]
+    set_widget.channels_list = [
+        SignalChannel(name="test1", lut="green", path="test1.zarr"),
+        SignalChannel(name="test2", lut="blue", path="test2.zarr"),
+    ]
     set_widget.labels_settings = {}
 
     mock_load_zarr = mocker.patch(
@@ -76,7 +80,10 @@ def test_experiment_loading_multiscale(viewer, mocker):
     """
     set_widget = SettingsWidget(viewer)
 
-    set_widget.channels_list = [{"path": "test1.zarr"}, {"path": "test2.zarr"}]
+    set_widget.channels_list = [
+        SignalChannel(name="test1", lut="green", path="test1.zarr"),
+        SignalChannel(name="test2", lut="blue", path="test2.zarr"),
+    ]
     set_widget.labels_settings = {}
 
     mock_load_zarr = mocker.patch(

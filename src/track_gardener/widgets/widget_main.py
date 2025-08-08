@@ -197,9 +197,9 @@ class TrackGardener(QWidget):
 
         # add graph widgets
         for gr in graph_list:
-            graph_name = gr.get("name", "Unnamed")
-            graph_signals = gr.get("signals", [])
-            graph_colors = gr.get("colors", [])
+            graph_name = gr.name
+            graph_signals = gr.signals
+            graph_colors = gr.colors
             graph_widget = SignalPlotControlPanel(
                 viewer,
                 session,

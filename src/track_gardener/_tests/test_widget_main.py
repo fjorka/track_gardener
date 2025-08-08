@@ -3,6 +3,7 @@ import os
 import pytest
 from qtpy.QtWidgets import QTabWidget
 
+from track_gardener.config.models import Graph
 from track_gardener.widgets.widget_main import TrackGardener
 
 
@@ -29,7 +30,14 @@ def test_adding_widgets(viewer, db_session):
     ch_list = []
     ch_names = []
     signal_list = []
-    graph_list = [{"signals": ["ch0_nuc"], "colors": "white"}]
+    graph_list = [
+        Graph(
+            name="DHB Signals",
+            signals=["ch0_nuc", "ch0_cyto"],
+            colors=["yellow", "green"],
+        )
+    ]
+
     cell_tags = {}
 
     main_widget.create_widgets(
@@ -69,7 +77,13 @@ def test_clearing_widgets(viewer, db_session):
     ch_list = []
     ch_names = []
     signal_list = []
-    graph_list = [{"signals": ["ch0_nuc"], "colors": "white"}]
+    graph_list = [
+        Graph(
+            name="DHB Signals",
+            signals=["ch0_nuc", "ch0_cyto"],
+            colors=["yellow", "green"],
+        )
+    ]
     cell_tags = {}
 
     main_widget.create_widgets(

@@ -221,6 +221,7 @@ class SettingsWidget(QWidget):
         self.channels_list = config.signal_channels
         self.graphs_list = config.graphs or []
         self.cell_tags = config.cell_tags or {}
+        self.labels_settings = config.labels_settings or {}
         self.signal_function = create_calculate_signals_function(
             config, loaded_functions
         )
@@ -271,10 +272,10 @@ class SettingsWidget(QWidget):
         # load images
         self.channels_data_list = []
         for ch in self.channels_list:
-            channel_name = ch.get("name", "Unnamed")
-            channel_path = ch.get("path", "")
-            channel_lut = ch.get("lut", "green")
-            channel_contrast_limits = ch.get("contrast_limits", None)
+            channel_name = ch.name
+            channel_path = ch.path
+            channel_lut = ch.lut or "gray"
+            channel_contrast_limits = ch.contrast_limits or None
 
             # get data from zarr
             # a list of arrays
@@ -308,7 +309,14 @@ class SettingsWidget(QWidget):
 
         # set labels settings
         labels_layer.selected_label = 0
-        labels_layer.brush_size = self.labels_settings.get("brush_size", 10)
+        if self.labels_settings:
+            for key, value in self.labels_settings.items():
+                # Check if the layer has this attribute to avoid errors from typos
+                if hasattr(labels_layer, key):
+                    setattr(labels_layer, key, value)
+                else:
+                    # Optionally, warn the user about an unknown setting
+                    print(f"Warning: Ignoring unknown labels_setting '{key}'")
 
         # set viewer status
         self.viewer.status = "Experiment loaded"
@@ -324,7 +332,7 @@ class SettingsWidget(QWidget):
         self.signal_list = fdb.get_signals(self.session)
 
         # Trigger populating of tab2 in the main widget with tracking widgets
-        ch_names = [ch.get("name", "Unnamed") for ch in self.channels_list]
+        ch_names = [ch.name for ch in self.channels_list]
         if self.create_widgets_callback is not None:
             self.create_widgets_callback(
                 self.viewer,

@@ -131,6 +131,7 @@ class TrackGardenerConfig(BaseModel):
     database: DatabaseSettings
     graphs: list[Graph] | None = None
     cell_tags: dict[str, str] | None = None
+    labels_settings: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def _compute_and_validate_measurement_names(self) -> "TrackGardenerConfig":

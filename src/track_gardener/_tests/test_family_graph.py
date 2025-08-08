@@ -77,7 +77,7 @@ def test_selection_of_track(viewer, db_session):
     vb = lineage_plot_canvas.plot_view.vb
 
     # Desired data coordinates
-    data_x, data_y = 10, 0.0
+    data_x, data_y = 10, -0.8
     expected_label = 207
 
     # Translate data coordinates into scene coordinates
@@ -126,7 +126,7 @@ def test_change_track_status(viewer, db_session):
     vb = lineage_plot_canvas.plot_view.vb
 
     # Desired data coordinates
-    data_x, data_y = 10, 0.0
+    data_x, data_y = 10, -0.5
 
     # Translate data coordinates into scene coordinates
     scene_point = vb.mapViewToScene(QPointF(data_x, data_y))
