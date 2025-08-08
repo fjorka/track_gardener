@@ -9,7 +9,7 @@ from skimage.measure import regionprops
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from track_gardener.db.config_functions import (
+from track_gardener.config.config_functions import (
     create_calculate_signals_function,
 )
 from track_gardener.db.db_model import NO_PARENT, Base, CellDB, TrackDB

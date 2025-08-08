@@ -1,6 +1,5 @@
 """
-This module provides a functions to calculate the vertical positions (y-coordinates)
-of nodes in a tree-like graph structure.
+This module provides a functions to calculate the vertical positions of nodes.
 """
 
 from typing import TYPE_CHECKING, Hashable

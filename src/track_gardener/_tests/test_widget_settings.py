@@ -1,9 +1,11 @@
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import numpy as np
 from qtpy.QtWidgets import QPushButton
 
-from track_gardener.widgets.widget_settings import SettingsWidget
+from ..config.pipeline import load_and_validate_config
+from ..widgets.widget_settings import SettingsWidget
 
 
 def test_open_yaml_dialog(viewer, mocker):
@@ -11,17 +13,19 @@ def test_open_yaml_dialog(viewer, mocker):
     Test that the dialog to select a file opens.
     """
     set_widget = SettingsWidget(viewer)
+    mock_config_object = MagicMock()
+    mock_loaded_funcs = {"some_func": MagicMock()}  # A dummy dictionary
 
     mock_getOpenFileName = mocker.patch(
         "qtpy.QtWidgets.QFileDialog.getOpenFileName",
         return_value=("test.yaml", None),
     )
-    validateConfigFile_mock = mocker.patch(
-        "track_gardener.widgets.widget_settings.validateConfigFile",
-        return_value=(True, ""),
+    mock_loader = mocker.patch(
+        "track_gardener.widgets.widget_settings.load_and_validate_config",
+        return_value=(mock_config_object, mock_loaded_funcs),
     )
     load_config_file_mock = mocker.patch(
-        "track_gardener.widgets.widget_settings.SettingsWidget.load_config_file"
+        "track_gardener.widgets.widget_settings.SettingsWidget.load_config"
     )
     reorganize_mock = mocker.patch(
         "track_gardener.widgets.widget_settings.SettingsWidget.reorganize_widgets"
@@ -30,7 +34,7 @@ def test_open_yaml_dialog(viewer, mocker):
     set_widget.open_file_dialog()
 
     mock_getOpenFileName.assert_called_once()
-    validateConfigFile_mock.assert_called_once_with("test.yaml")
+    mock_loader.assert_called_once_with("test.yaml")
     load_config_file_mock.assert_called_once()
     reorganize_mock.assert_called_once()
 
@@ -104,7 +108,8 @@ def test_yaml_loading(viewer):
     config_path = str(
         Path(__file__).parent / "fixtures" / "example_config.yaml"
     )
-    set_widget.load_config_file(config_path)
+    config, funcs = load_and_validate_config(config_path)
+    set_widget.load_config(config, funcs)
 
     assert (
         set_widget.experiment_name == "Test experiment"

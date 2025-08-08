@@ -1,5 +1,5 @@
 """
-Module for creating a lineage plot widget within a napari viewer.
+A PyQtGraph widget for displaying a lineage plot.
 
 This module defines the `LineagePlotCanvas` class, a PyQtGraph-based widget that
 visualizes cell lineage trees. It interacts with a napari viewer and a database

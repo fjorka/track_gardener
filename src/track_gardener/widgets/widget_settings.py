@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Callable
 import dask.array as da
 import napari
 import numpy as np
-import yaml
 import zarr
 from qtpy import QtWidgets
 from qtpy.QtCore import Qt
@@ -33,8 +32,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import track_gardener.db.db_functions as fdb
-from track_gardener.db.config_functions import validateConfigFile
-from track_gardener.signals.build_signals_function import (
+from track_gardener.config.exceptions import (
+    ConfigEnvironmentError,
+    ConfigFormatError,
+)
+from track_gardener.config.models import TrackGardenerConfig
+from track_gardener.config.pipeline import load_and_validate_config
+from track_gardener.signals.factory import (
     create_calculate_signals_function,
 )
 from track_gardener.widgets.widget_signal_plot_controller import (
@@ -159,20 +163,17 @@ class SettingsWidget(QWidget):
 
             # test if the config file is correct
             self.viewer.status = "Checking the config file..."
-            status, msg = validateConfigFile(fileName)
-
-            if status:
-                # display a message
-                self.viewer.status = "Config file is correct."
-
-                # load config content
-                self.load_config_file(fileName)
-
+            try:
+                config_obj, loaded_functions = load_and_validate_config(
+                    fileName
+                )
+                self.load_config(config_obj, loaded_functions)
                 self.reorganize_widgets()
-            else:
-                # display a window with the error message
+
+            except (ConfigFormatError, ConfigEnvironmentError) as e:
+
                 msgBox = QtWidgets.QMessageBox(self.viewer.window._qt_window)
-                msgBox.setText(msg)
+                msgBox.setText(str(e))
                 msgBox.exec()
 
     def reorganize_widgets(self) -> None:
@@ -199,30 +200,28 @@ class SettingsWidget(QWidget):
         self.mWidget.layout().addWidget(pb, self.widget_line, 0)
         self.widget_line += 1
 
-    def load_config_file(self, filePath: str) -> None:
-        """Parses the YAML configuration file and stores its contents.
+    def load_config(
+        self,
+        config: TrackGardenerConfig,
+        loaded_functions: dict[str | tuple, Callable],
+    ) -> None:
+        """Loads the configuration from a TrackGardenerConfig object.
 
         Args:
-            filePath (str): The path to the YAML configuration file.
+            config (TrackGardenerConfig): The configuration object to load.
         """
 
-        with open(filePath) as file:
-            config = yaml.safe_load(file)
-
-            exp_settings = config.get("experiment_settings", {})
-            self.experiment_name = exp_settings.get(
-                "experiment_name", "Unnamed"
-            )
-            self.experiment_description = exp_settings.get(
-                "experiment_description", ""
-            )
-            self.database_path = config.get("database", {}).get("path", "")
-            self.channels_list = config.get("signal_channels", [])
-            self.labels_settings = config.get("labels_settings", {})
-            self.graphs_list = config.get("graphs", [])
-            self.cell_tags = config.get("cell_tags", [])
-
-            self.signal_function = create_calculate_signals_function(config)
+        self.experiment_name = config.experiment_settings.experiment_name
+        self.experiment_description = (
+            config.experiment_settings.description or ""
+        )
+        self.database_path = str(config.database.path)
+        self.channels_list = config.signal_channels
+        self.graphs_list = config.graphs or []
+        self.cell_tags = config.cell_tags or {}
+        self.signal_function = create_calculate_signals_function(
+            config, loaded_functions
+        )
 
     def load_zarr(self, channel_path: str) -> list[da.Array]:
         """Loads data from a zarr store.

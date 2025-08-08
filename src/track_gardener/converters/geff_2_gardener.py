@@ -8,12 +8,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from tqdm import tqdm
 
+from track_gardener.config.config_functions import (
+    create_calculate_signals_function,
+)
 from track_gardener.converters.nx_2_gardener import graph_to_trackdb
 from track_gardener.converters.track_array_2_gardener import (
     convert_labeled_frame_to_cells,
-)
-from track_gardener.db.config_functions import (
-    create_calculate_signals_function,
 )
 from track_gardener.db.db_model import Base
 
