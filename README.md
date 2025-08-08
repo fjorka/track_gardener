@@ -23,8 +23,8 @@ and review the napari docs for plugin developers:
 https://napari.org/stable/plugins/index.html
 -->
 <picture>
-  <source srcset="./src/track_gardener/icons/track_gardener_logo.png" media="(prefers-color-scheme: dark)">
-  <source srcset="./src/track_gardener/icons/track_gardener_logo_white.png" media="(prefers-color-scheme: light)">
+  <source srcset="./src/track_gardener/icons/track_gardener_logo_transparent.png" media="(prefers-color-scheme: dark)">
+  <source srcset="./src/track_gardener/icons/track_gardener_logo_white_transparent.png" media="(prefers-color-scheme: light)">
   <img src="./src/track_gardener/icons/track_gardener_logo_light.png" alt="Project Logo" width="300"/>
 </picture>
 
