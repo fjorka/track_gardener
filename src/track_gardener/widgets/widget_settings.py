@@ -170,7 +170,7 @@ class SettingsWidget(QWidget):
                     fileName
                 )
                 self.load_config(config_obj, loaded_functions)
-                self.reorganize_widgets()
+                self.clean_and_load_experiment()
 
             except (ConfigFormatError, ConfigEnvironmentError) as e:
 
@@ -178,8 +178,8 @@ class SettingsWidget(QWidget):
                 msgBox.setText(str(e))
                 msgBox.exec()
 
-    def reorganize_widgets(self) -> None:
-        """Clears old widgets and loads the new experiment and tracking data."""
+    def clean_interface(self) -> None:
+        """Clears all widgets and resets the main widget layout."""
 
         # clear main widgets
         if self.clear_widgets_callback is not None:
@@ -192,7 +192,18 @@ class SettingsWidget(QWidget):
 
         self.added_widgets = []
 
-        self.load_experiment()
+        # clean layers
+        layers_list = [x.name for x in self.viewer.layers]
+
+        for layer in layers_list:
+            self.viewer.layers.remove(layer)
+
+    def clean_and_load_experiment(self) -> None:
+        """Clears old widgets and loads the new experiment and tracking data."""
+
+        self.clean_interface()
+
+        self.load_layers()
         self.load_tracking()
 
         # display load widgets button
@@ -255,32 +266,16 @@ class SettingsWidget(QWidget):
 
         return data
 
-    def load_experiment(self) -> None:
+    def load_layers(self) -> None:
         """Loads experiment data (images, labels) into the napari viewer."""
-
-        # remove all previous layers
-
-        layers_list = [x.name for x in self.viewer.layers]
-
-        for layer in layers_list:
-            self.viewer.layers.remove(layer)
-
-        ############################################################################################
-        ############################################################################################
-        # populate the viewer
 
         # load images
         self.channels_data_list = []
         for ch in self.channels_list:
-            channel_name = ch.name
-            channel_path = ch.path
-            channel_lut = ch.lut or "gray"
-            channel_contrast_limits = ch.contrast_limits or None
 
             # get data from zarr
-            # a list of arrays
             # multiple arrays if multiscale
-            data = self.load_zarr(channel_path)
+            data = self.load_zarr(ch.path)
 
             # necessary to send to the modification widget
             # to recalculate signals when object changes
@@ -291,10 +286,10 @@ class SettingsWidget(QWidget):
 
             self.viewer.add_image(
                 data_viewer,
-                name=channel_name,
-                colormap=channel_lut,
+                name=ch.name,
+                colormap=ch.lut,
                 blending="additive",
-                contrast_limits=channel_contrast_limits,
+                contrast_limits=ch.contrast_limits,
             )
 
         # ensure reset view
@@ -320,6 +315,9 @@ class SettingsWidget(QWidget):
 
         # set viewer status
         self.viewer.status = "Experiment loaded"
+
+        # clear widgets if labels are removed
+        self.viewer.layers.events.removed.connect(self.clean_interface)
 
     def load_tracking(self) -> None:
         """Establishes the database connection and creates tracking widgets."""

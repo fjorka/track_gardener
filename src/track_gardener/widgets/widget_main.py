@@ -96,9 +96,11 @@ class TrackGardener(QWidget):
             events_list = [
                 self.viewer.camera.events.zoom,
                 self.viewer.camera.events.center,
-                self.viewer.layers["Labels"].events.visible,
                 self.viewer.dims.events.current_step,
             ]
+            if "Labels" in self.viewer.layers:
+                events_list.append(self.viewer.layers["Labels"].events.visible)
+
             callbacks_list = [
                 self.navigation_widget.build_labels,
                 self.navigation_widget.center_object_core_function,
@@ -118,14 +120,25 @@ class TrackGardener(QWidget):
                 for widget in self.settings_window.added_widgets[1:]:
                     self.viewer.window.remove_dock_widget(widget)
 
-        # remove widgets from tab2
-        if self.navigation_widget is not None:
-            self.navigation_widget.setParent(None)
-            self.navigation_widget.deleteLater()
+        # switch to the first tab
+        self.tabwidget.setCurrentIndex(0)
 
-        if self.modification_widget is not None:
-            self.modification_widget.setParent(None)
-            self.modification_widget.deleteLater()
+        # remove widgets from tab2
+        layout = self.tab2.layout()
+        if layout is None:
+            return
+        # Create a static list of all widgets in the layout.
+        widgets_to_delete = []
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            widget = item.widget()
+            if widget is not None:
+                widgets_to_delete.append(widget)
+
+        # Iterate over the static list to remove and delete each widget.
+        for widget in widgets_to_delete:
+            widget.setParent(None)
+            widget.deleteLater()
 
     def create_widgets(
         self,

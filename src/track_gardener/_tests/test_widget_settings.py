@@ -29,7 +29,7 @@ def test_open_yaml_dialog(viewer, mocker):
         "track_gardener.widgets.widget_settings.SettingsWidget.load_config"
     )
     reorganize_mock = mocker.patch(
-        "track_gardener.widgets.widget_settings.SettingsWidget.reorganize_widgets"
+        "track_gardener.widgets.widget_settings.SettingsWidget.clean_and_load_experiment"
     )
 
     set_widget.open_file_dialog()
@@ -47,6 +47,9 @@ def test_experiment_loading(viewer, mocker):
     """
     set_widget = SettingsWidget(viewer)
 
+    # why, oh why do you need to be cleaned just after being born?
+    set_widget.clean_interface()
+
     set_widget.channels_list = [
         SignalChannel(name="test1", lut="green", path="test1.zarr"),
         SignalChannel(name="test2", lut="blue", path="test2.zarr"),
@@ -58,7 +61,7 @@ def test_experiment_loading(viewer, mocker):
     )
     mock_load_zarr.return_value = np.zeros((1, 10, 10))
 
-    set_widget.load_experiment()
+    set_widget.load_layers()
 
     # test number of image layers
     layer_im_num = len([x for x in viewer.layers if x._type_string == "image"])
@@ -79,6 +82,7 @@ def test_experiment_loading_multiscale(viewer, mocker):
     Mocks method load_zarr to return 2 arrays.
     """
     set_widget = SettingsWidget(viewer)
+    set_widget.clean_interface()
 
     set_widget.channels_list = [
         SignalChannel(name="test1", lut="green", path="test1.zarr"),
@@ -91,7 +95,7 @@ def test_experiment_loading_multiscale(viewer, mocker):
     )
     mock_load_zarr.return_value = [np.zeros((1, 10, 10)), np.zeros((1, 5, 5))]
 
-    set_widget.load_experiment()
+    set_widget.load_layers()
 
     # test number of image layers
     layer_im_num = len([x for x in viewer.layers if x._type_string == "image"])
@@ -148,17 +152,15 @@ def test_reorg_widgets(viewer, mocker):
     set_widget = SettingsWidget(viewer)
 
     mock_load_exp = mocker.patch(
-        "track_gardener.widgets.widget_settings.SettingsWidget.load_experiment"
+        "track_gardener.widgets.widget_settings.SettingsWidget.load_layers"
     )
     mock_load_track = mocker.patch(
         "track_gardener.widgets.widget_settings.SettingsWidget.load_tracking"
     )
 
-    set_widget.reorganize_widgets()
+    set_widget.clean_and_load_experiment()
 
-    assert (
-        mock_load_exp.called
-    ), "load_experiment method should have been called"
+    assert mock_load_exp.called, "load_layers method should have been called"
     assert (
         mock_load_track.called
     ), "load_tracking method should have been called"
