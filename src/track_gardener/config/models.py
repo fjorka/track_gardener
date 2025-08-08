@@ -30,7 +30,7 @@ class SignalChannel(BaseModel):
 
     name: str
     path: Path
-    lut: str
+    lut: str = "gray"
     contrast_limits: list[int | float] | None = None
 
 

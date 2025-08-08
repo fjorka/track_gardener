@@ -7,20 +7,21 @@ object to build a closure that efficiently calculates all requested measurements
 for a single cell.
 """
 
+import functools
 from typing import TYPE_CHECKING, Any, Callable
 
+import dask.array as da
 import numpy as np
 from skimage.measure import regionprops
 
 from ..config.models import TrackGardenerConfig
 
 if TYPE_CHECKING:
-    import numpy.typing as npt
     from skimage.measure._regionprops import RegionProperties
 
 
 def create_calculate_signals_function(
-    config: TrackGardenerConfig, loaded_funcs: dict[str | tuple, Callable]
+    config: "TrackGardenerConfig", loaded_funcs: dict[str | tuple, Callable]
 ) -> Callable | None:
     """Creates a signal calculation function from a validated config.
 
@@ -38,10 +39,27 @@ def create_calculate_signals_function(
         A callable function `calculate_cell_signals(cell, t, ch_data_list)`
         that computes all measurements, or None if no measurements are configured.
     """
+
     if not config.cell_measurements:
         return None
 
-    # Pre-process and cache information from the config for efficiency
+    # Pre-bundle Track Gardener functions
+    gardener_funcs = {
+        m.function: functools.partial(loaded_funcs[m.function], **m.kwargs)
+        for m in config.cell_measurements
+        if m.source == "track_gardener"
+    }
+
+    # Pre-bundle custom functions
+    custom_funcs = {
+        (m.source, m.function): functools.partial(
+            loaded_funcs[(m.source, m.function)], **m.kwargs
+        )
+        for m in config.cell_measurements
+        if m.source not in ["regionprops", "track_gardener"]
+    }
+
+    # Pre-cache other config details for the closure
     ch_names = [ch.name for ch in config.signal_channels]
     reg_no_signal = [
         m
@@ -53,18 +71,17 @@ def create_calculate_signals_function(
         for m in config.cell_measurements
         if m.source == "regionprops" and m.channels
     ]
-    gardener_signal = [
+    gardener_signal_configs = [
         m for m in config.cell_measurements if m.source == "track_gardener"
     ]
-    custom_signal = [
+    custom_signal_configs = [
         m
         for m in config.cell_measurements
         if m.source not in ["regionprops", "track_gardener"]
     ]
 
-    # --- The Dynamically Generated Calculation Function ---
     def calculate_cell_signals(
-        cell: "RegionProperties", t: int, ch_data_list: list["npt.NDArray"]
+        cell: "RegionProperties", t: int, ch_data_list: list[da.Array]
     ) -> dict[str, Any]:
         """Calculates all configured signals for a single cell at a time point.
 
@@ -75,8 +92,8 @@ def create_calculate_signals_function(
         Args:
             cell: A `RegionProperties` object for the cell from `skimage.measure`.
             t: The time point (frame index) of the measurement.
-            ch_data_list: A list of numpy arrays, where each array is the
-                image data for a specific signal channel.
+            ch_data_list: A list of 3D dask arrays, where each array is the
+            specific signal channel.
 
         Returns:
             A dictionary where keys are the final measurement names and values
@@ -96,7 +113,6 @@ def create_calculate_signals_function(
                 dtype=ch_data_list[0].dtype,
             )
             for i, ch_image in enumerate(ch_data_list):
-                # Handle time-series (3D) or single-frame (2D) data
                 img_slice = ch_image[t] if ch_image.ndim == 3 else ch_image
                 signal_cube[..., i] = img_slice[min_r:max_r, min_c:max_c]
 
@@ -112,19 +128,19 @@ def create_calculate_signals_function(
                     cell_dict[f"{ch_name}_{base_name}"] = prop_result[idx]
 
         # 3. Pre-loaded Track Gardener functions
-        for m in gardener_signal:
-            func = loaded_funcs[m.function]
-            result = func(cell, t, ch_data_list, **m.kwargs)
+        for m in gardener_signal_configs:
+            func = gardener_funcs[m.function]
+            result = func(cell, t, ch_data_list)
             base_name = m.name or m.function
             for ch_name in m.channels:
                 idx = ch_names.index(ch_name)
                 cell_dict[f"{ch_name}_{base_name}"] = result[idx]
 
-        # 4. Pre-loaded custom functions from user scripts
-        for m in custom_signal:
+        # 4. Pre-loaded custom functions (now simplified)
+        for m in custom_signal_configs:
             key = (m.source, m.function)
-            func = loaded_funcs[key]
-            result = func(cell, t, ch_data_list, **m.kwargs)
+            func = custom_funcs[key]
+            result = func(cell, t, ch_data_list)
             base_name = m.name or m.function
             for ch_name in m.channels:
                 idx = ch_names.index(ch_name)
