@@ -95,6 +95,29 @@ class ModificationWidget(QWidget):
         spacer_00.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.layout().addWidget(spacer_00)
 
+        ############################################################################################
+        # add copy/paste panel
+        copy_paste_group = QGroupBox()
+        copy_paste_group.setLayout(QGridLayout())
+        copy_paste_group.layout().addWidget(QLabel("copy and paste:"))
+        self.copy_paste_widget = self.add_copy_paste_panel()
+        copy_paste_group.layout().addWidget(self.copy_paste_widget)
+        self.layout().addWidget(copy_paste_group)
+
+        # add a keyboard shortcut for label modification
+        self.viewer.bind_key("Ctrl-C", self.copy_cell_function, overwrite=True)
+
+        # add a keyboard shortcut for label modification
+        self.viewer.bind_key(
+            "Ctrl-V", self.paste_cell_function, overwrite=True
+        )
+
+        spacer_02 = QWidget()
+        spacer_02.setFixedHeight(4)
+        spacer_02.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.layout().addWidget(spacer_02)
+
+        ############################################################################################
         # add notes and tagging
         self.note_tag_widget = self.add_note_tag_buttons()
 
@@ -114,6 +137,7 @@ class ModificationWidget(QWidget):
         # connect change of cell to change of note
         self.labels.events.selected_label.connect(self.update_note_and_icon)
 
+        ############################################################################################
         # add cell modification
         self.mod_cell_btn = self.add_mod_cell_btn()
         self.layout().addWidget(self.mod_cell_btn)
@@ -673,6 +697,102 @@ class ModificationWidget(QWidget):
 
         # update status
         self.viewer.status = sts
+
+    ################################################################################################
+    ################################################################################################
+    def add_copy_paste_panel(self) -> QWidget:
+        """Creates a panel for copying cell properties.
+
+        Returns:
+            QWidget: The panel containing the copy controls.
+        """
+        copy_panel = QWidget()
+        copy_panel.setLayout(QHBoxLayout())
+
+        # Create a label and spinbox for the source cell
+        self.copy_from_label = QLabel("copy cell:")
+
+        # Create a button to perform the copy action
+        self.copy_button = QPushButton("Copy")
+        self.copy_button.clicked.connect(self.copy_cell_function)
+
+        # Creat a button to perform the paste action
+        self.paste_button = QPushButton("Paste")
+        self.paste_button.clicked.connect(self.paste_cell_function)
+
+        # Add widgets to the panel layout
+        copy_panel.layout().addWidget(self.copy_button)
+        copy_panel.layout().addWidget(self.paste_button)
+
+        return copy_panel
+
+    def copy_cell_function(self, event: Any | None = None) -> None:
+        """Copies the cell mask from the labels layer to the clipboard."""
+
+        # get the selected cell
+        self.copied_cell = [
+            x
+            for x in self.labels.metadata["query"]
+            if x.track_id == self.labels.selected_label
+        ][0]
+
+        self.viewer.status = (
+            f"Cell {self.copied_cell.track_id} copied to clipboard."
+        )
+
+    def paste_cell_function(self, event: Any | None = None) -> None:
+        """Pastes the cell mask from the clipboard to the labels layer."""
+
+        # if by shortcut take cursor position
+        if event:
+            cursor_pos = self.viewer.cursor.position
+            row, col = int(cursor_pos[1]), int(cursor_pos[2])
+
+        else:
+            # otherwise take the center of the current view
+            corner_pixels = self.viewer.layers[0].corner_pixels
+            row = (
+                corner_pixels[0, 1]
+                + (corner_pixels[1, 1] - corner_pixels[0, 1]) // 2
+            )
+            col = (
+                corner_pixels[0, 2]
+                + (corner_pixels[1, 2] - corner_pixels[0, 2]) // 2
+            )
+
+        if hasattr(self, "copied_cell") and self.copied_cell:
+            # paste the cell
+            row_start = int(
+                row
+                - self.labels.translate[0]
+                - self.copied_cell.mask.shape[0] // 2
+            )
+            col_start = int(
+                col
+                - self.labels.translate[1]
+                - self.copied_cell.mask.shape[1] // 2
+            )
+            row_stop = int(row_start + self.copied_cell.mask.shape[0])
+            col_stop = int(col_start + self.copied_cell.mask.shape[1])
+            if (
+                row_start < 0
+                or col_start < 0
+                or row_stop > self.labels.data.shape[0]
+                or col_stop > self.labels.data.shape[1]
+            ):
+                self.viewer.status = "Error: Pasted cell goes out of bounds."
+                return
+            else:
+                self.labels.data[row_start:row_stop, col_start:col_stop][
+                    self.copied_cell.mask > 0
+                ] = self.copied_cell.track_id
+
+            self.viewer.status = (
+                f"Cell {self.copied_cell.track_id} pasted at ({row}, {col})."
+            )
+
+            # make it official
+            self.mod_cell_function()
 
     ################################################################################################
     ################################################################################################
