@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Callable, Sequence
 
 import dask.array as da
 import networkx as nx
+import numpy as np
 from sqlalchemy import and_, func
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm.attributes import flag_modified
@@ -734,3 +735,44 @@ def get_tracks_nx_from_root(session: "Session", root_id: int) -> nx.DiGraph:
             G.add_edge(track.parent_track_id, track.track_id)
 
     return G
+
+
+def build_trackdb_from_celldb(
+    track_id_seq: Sequence[int], t_seq: Sequence[int]
+) -> list[TrackDB]:
+    """Builds TrackDB objects from track_id and t sequences.
+
+    Args:
+        track_id_seq: Sequence of track IDs (ints).
+        t_seq: Sequence of frame indices (ints), parallel to track_id_seq.
+
+    Returns:
+        List[TrackDB]: One TrackDB object per unique track_id, with t_begin/min(t) and t_end/max(t).
+    """
+    track_ids = np.asarray(track_id_seq)
+    ts = np.asarray(t_seq)
+    if track_ids.shape != ts.shape:
+        raise ValueError("track_id_seq and t_seq must be the same length.")
+
+    # Find unique track IDs and the indices to reconstruct groups
+    unique_tracks, inv = np.unique(track_ids, return_inverse=True)
+
+    t_min = np.full(unique_tracks.shape, np.inf)
+    t_max = np.full(unique_tracks.shape, -np.inf)
+
+    # For each entry, update min/max using the unique track index
+    np.minimum.at(t_min, inv, ts)
+    np.maximum.at(t_max, inv, ts)
+
+    # Construct TrackDB objects
+    tracks = []
+    for i, tid in enumerate(unique_tracks):
+        track = TrackDB(
+            track_id=int(tid),
+            parent_track_id=NO_PARENT,
+            root=int(tid),
+            t_begin=int(t_min[i]),
+            t_end=int(t_max[i]),
+        )
+        tracks.append(track)
+    return tracks

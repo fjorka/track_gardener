@@ -6,6 +6,7 @@ signal_channels:
   - name: ch0
     path: D:\track-gardener\examples\Fluo-N2DL-HeLa-01_images.zarr\images
     lut: gray
+    contrast_limits: [0, 255]
 
 cell_measurements:
   - function: area
