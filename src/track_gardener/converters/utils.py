@@ -377,7 +377,7 @@ def build_geff_id_assigner(
     # Create the ID assigner function.
     def id_assigner(region: "RegionProperties") -> tuple[int, int] | None:
         """Assigns GEFF ID and track ID based on the region's properties."""
-        mapping_key = (region.t, region.segm_id)
+        mapping_key = (region.t, region.label)
         if mapping_key in mapping:
             geff_id, track_id = mapping[mapping_key]
             return geff_id, track_id

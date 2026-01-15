@@ -192,11 +192,8 @@ class SettingsWidget(QWidget):
 
         self.added_widgets = []
 
-        # clean layers
-        layers_list = [x.name for x in self.viewer.layers]
-
-        for layer in layers_list:
-            self.viewer.layers.remove(layer)
+        self.viewer.layers.events.removed.disconnect(self.clean_interface)
+        self.viewer.layers.clear()
 
     def clean_and_load_experiment(self) -> None:
         """Clears old widgets and loads the new experiment and tracking data."""
