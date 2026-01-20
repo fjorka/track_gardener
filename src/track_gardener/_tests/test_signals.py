@@ -84,7 +84,7 @@ def basic_config(tmp_path) -> TrackGardenerConfig:
                 source="track_gardener",
                 channels=["CH1"],
                 ring_width=5,
-                statistic="mean",
+                statistics="mean",
             ),
             CellMeasurement(
                 function="custom_sum",
@@ -115,28 +115,28 @@ def loaded_funcs() -> dict[str | tuple, Callable]:
 
 def test_cell_signal_median(cell_props, mock_dask_array):
     """Verify median calculation within the cell body."""
-    result = cell_signal(cell_props, 0, mock_dask_array, statistic="median")
+    result = cell_signal(cell_props, 0, mock_dask_array, statistics="median")
     assert isinstance(result, list)
     assert result[0] == pytest.approx(10.0)
 
 
 def test_cell_signal_mean(cell_props, mock_dask_array):
     """Verify mean calculation within the cell body."""
-    result = cell_signal(cell_props, 0, mock_dask_array, statistic="mean")
+    result = cell_signal(cell_props, 0, mock_dask_array, statistics="mean")
     assert result[0] > 11
 
 
 def test_cell_signal_sum(cell_props, mock_dask_array):
     """Verify sum of pixels within the cell body."""
     expected_sum = (99 * 10.0) + 1000
-    result = cell_signal(cell_props, 0, mock_dask_array, statistic="sum")
+    result = cell_signal(cell_props, 0, mock_dask_array, statistics="sum")
     assert result[0] == pytest.approx(expected_sum)
 
 
 def test_cell_signal_unsupported_statistic(cell_props, mock_dask_array):
     """Ensure an unsupported statistic raises a ValueError."""
     with pytest.raises(ValueError, match="Unsupported statistic"):
-        cell_signal(cell_props, 0, mock_dask_array, statistic="variance")
+        cell_signal(cell_props, 0, mock_dask_array, statistics="variance")
 
 
 # --- Tests for ring_signal ---
@@ -146,7 +146,7 @@ def test_ring_signal_mean(cell_props, mock_dask_array):
     """Verify mean calculation in the ring around the cell."""
     # The ring area in the mock data has a constant value of 2.0
     result = ring_signal(
-        cell_props, 0, mock_dask_array, ring_width=5, statistic="mean"
+        cell_props, 0, mock_dask_array, ring_width=5, statistics="mean"
     )
     assert isinstance(result, list)
     assert result[0] == pytest.approx(2.0)
@@ -171,7 +171,7 @@ def test_ring_signal_unsupported_statistic(cell_props, mock_dask_array):
     """Ensure an unsupported statistic raises a ValueError."""
     with pytest.raises(ValueError, match="Unsupported statistic"):
         ring_signal(
-            cell_props, 0, mock_dask_array, ring_width=5, statistic="mode"
+            cell_props, 0, mock_dask_array, ring_width=5, statistics="mode"
         )
 
 

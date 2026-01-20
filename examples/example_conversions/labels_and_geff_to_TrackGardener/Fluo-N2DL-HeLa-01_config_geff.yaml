@@ -15,6 +15,19 @@ cell_measurements:
     source: regionprops
     channels:
       - ch0
+  - function: cell_signal
+    name: cell_median
+    source: track_gardener
+    channels:
+      - ch0
+    statistics: median
+  - function: ring_signal
+    name: ring_median
+    source: track_gardener
+    channels:
+      - ch0
+    ring_width: 5
+    statistics: median
 
 database:
   path: Fluo-N2DL-HeLa-01_conversion_result.db

@@ -10,6 +10,7 @@ import zarr
 from skimage.measure import regionprops
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from tqdm import tqdm
 
 from track_gardener.config.loader import load_measurement_functions
 from track_gardener.config.models import TrackGardenerConfig
@@ -163,13 +164,24 @@ def segmentation_to_cellDB_table(
     )
 
     # Open channel arrays (assume one zarr per channel, shape = (T, H, W))
-    channel_arrays = [da.from_zarr(ch["path"]) for ch in signal_channels]
+    channel_arrays = []
+    for ch in signal_channels:
+        # Handle multiscale Zarr (e.g. OME-Zarr) by selecting the highest resolution
+        z_obj = zarr.open(ch["path"], mode="r")
+        if isinstance(z_obj, zarr.Group) and "0" in z_obj:
+            arr = da.from_zarr(ch["path"], component="0")
+        else:
+            arr = da.from_zarr(ch["path"])
+        channel_arrays.append(arr)
 
     counter = 0
-    for time_point, labeled_array in enumerate(segmentation_stack):
+    for time_point, labeled_array in enumerate(tqdm(segmentation_stack)):
 
         # Extract the channel frames for this timepoint
-        frame_channel_arrays = [arr[time_point] for arr in channel_arrays]
+        # Compute dask arrays to numpy to avoid repeated disk access per cell
+        frame_channel_arrays = [
+            arr[time_point].compute() for arr in channel_arrays
+        ]
 
         # Get regionprops with signals
         cell_list, counter = labeled_frame_to_regionprops(
@@ -338,7 +350,7 @@ def TG_to_cell_graph(session: "Session") -> nx.DiGraph:
 def build_geff_id_assigner(
     geff_path: str,
     track_id_prop: str = "track_id",
-    segm_id_prop: str = "segm_id",
+    segm_id_prop: str = "track_id",
     t_prop: str = "t",
 ) -> Callable[["RegionProperties"], tuple[int, int] | None]:
     """Builds a function that assigns GEFF and track IDs to region properties.

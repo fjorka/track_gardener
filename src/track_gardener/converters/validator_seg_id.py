@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple, Union
 import numpy as np
 import zarr
 from loguru import logger
+from tqdm import tqdm
 
 
 def validate_geff_seg_ids(
@@ -51,20 +52,44 @@ def validate_geff_seg_ids(
 
     logger.info("Beginning node validation...")
     results = []
-    for idx, (t, seg_id) in enumerate(zip(t_vals, seg_ids)):
+
+    # Sort by time to optimize IO
+    sorted_indices = np.argsort(t_vals)
+
+    current_t = -1
+    label_frame = None
+    frame_load_failed = False
+    current_frame_labels = None
+
+    for idx in tqdm(sorted_indices):
+        t = t_vals[idx]
+        seg_id = seg_ids[idx]
+
         if np.ma.is_masked(seg_id):
             logger.warning(
                 f"Seg ID is masked for {seg_id} at frame {t}, skipping."
             )
             continue
-        try:
-            label_frame = seg_array[t]
-        except IndexError:
+
+        # Load frame if time changed
+        if t != current_t:
+            current_t = t
+            try:
+                label_frame = seg_array[int(t)]
+                frame_load_failed = False
+                # Pre-calculate unique labels for O(1) lookup
+                current_frame_labels = set(np.unique(label_frame))
+            except IndexError:
+                frame_load_failed = True
+                label_frame = None
+                current_frame_labels = None
+
+        if frame_load_failed:
             logger.warning(f"Frame {t} is out of bounds at index {idx}")
             results.append((idx, "frame_out_of_bounds"))
             continue
 
-        if seg_id not in label_frame:
+        if seg_id not in current_frame_labels:
             logger.warning(
                 f"Seg ID {seg_id} not found in frame {t} at index {idx}"
             )

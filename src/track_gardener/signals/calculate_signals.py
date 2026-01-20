@@ -42,7 +42,11 @@ def _compute_if_dask(value: Any) -> Any:
         original value.
     """
     if isinstance(value, da.core.Array):
-        return value.compute()
+        value = value.compute()
+
+    if isinstance(value, (np.ndarray, np.generic)) and value.size == 1:
+        return value.item()
+
     return value
 
 
@@ -55,18 +59,18 @@ def cell_signal(
     cell: "RegionProperties",
     t: int,
     ch_data_list: list[da.Array],
+    statistics: str = "median",
     **kwargs: Any,
 ) -> list[float]:
     """Calculates a signal statistic within the primary body of a cell.
 
     Args:
         cell: The scikit-image region property object for the cell.
-        t: The timepoint (frame) to analyze.
-        ch_data_list: A list of Dask arrays, one for each image channel.
+        t: The timepoint (frame) to analyze. Ignored for 2D arrays.
+        ch_data_list: A list of Dask arrays (2D or 3D), one for each image channel.
+        statistics: The name of the statistic to compute. Defaults to 'median'.
+            Options include 'mean', 'median', 'sum', 'max', and 'min'.
         **kwargs: Keyword arguments for the measurement.
-            - statistic (str, optional): The name of the statistic to compute.
-              Defaults to 'median'. Options include 'mean', 'median', 'sum',
-              'max', and 'min'.
 
     Returns:
         A list of the calculated signal values, one for each channel.
@@ -74,21 +78,26 @@ def cell_signal(
     Raises:
         ValueError: If the requested statistic is not supported.
     """
-    statistic: str = kwargs.get("statistic", "median")
+    # Handle potential alias (e.g. 'statistic' vs 'statistics')
+    if "statistic" in kwargs:
+        statistics = kwargs["statistic"]
 
-    if statistic not in STATISTIC_FUNCS:
+    if statistics not in STATISTIC_FUNCS:
         raise ValueError(
-            f"Unsupported statistic: '{statistic}'. "
+            f"Unsupported statistic: '{statistics}'. "
             f"Use one of {list(STATISTIC_FUNCS.keys())}."
         )
 
-    agg_func = STATISTIC_FUNCS[statistic]
+    agg_func = STATISTIC_FUNCS[statistics]
     min_r, min_c, max_r, max_c = cell.bbox
     cell_mask = cell.image > 0
 
     results = []
     for signal_da in ch_data_list:
-        roi = signal_da[t, min_r:max_r, min_c:max_c]
+        if signal_da.ndim == 3:
+            roi = signal_da[t, min_r:max_r, min_c:max_c]
+        else:
+            roi = signal_da[min_r:max_r, min_c:max_c]
         masked_signal = roi[cell_mask]
         result = agg_func(masked_signal)
         results.append(_compute_if_dask(result))
@@ -100,6 +109,8 @@ def ring_signal(
     cell: "RegionProperties",
     t: int,
     ch_data_list: list[da.Array],
+    ring_width: int | None = None,
+    statistics: str = "median",
     **kwargs: Any,
 ) -> list[float]:
     """Calculates a signal statistic in a ring around a cell.
@@ -110,13 +121,11 @@ def ring_signal(
 
     Args:
         cell: The scikit-image region property object for the cell.
-        t: The timepoint (frame) to analyze.
-        ch_data_list: A list of Dask arrays, one for each image channel.
+        t: The timepoint (frame) to analyze. Ignored for 2D arrays.
+        ch_data_list: A list of Dask arrays (2D or 3D), one for each image channel.
+        ring_width: The required width of the ring in pixels.
+        statistics: The name of the statistic to compute. Defaults to 'mean'.
         **kwargs: Keyword arguments for the measurement.
-            - ring_width (int): The required width of the ring in pixels.
-            - statistic (str, optional): The name of the statistic to compute.
-              Defaults to 'mean'. Options include 'mean', 'median', 'sum',
-              'max', and 'min'.
 
     Returns:
         A list of the calculated ring signal values, one for each channel.
@@ -127,30 +136,36 @@ def ring_signal(
         AssertionError: If an internal logic error leads to a shape mismatch
             between the image ROI and the generated ring mask.
     """
-    try:
-        ring_width: int = kwargs["ring_width"]
-    except KeyError:
-        raise KeyError(
-            "Missing required keyword argument: 'ring_width'"
-        ) from None
+    if ring_width is None:
+        # Fallback if passed in kwargs but not captured (unlikely with explicit arg)
+        if "ring_width" in kwargs:
+            ring_width = kwargs["ring_width"]
+        else:
+            raise KeyError("Missing required keyword argument: 'ring_width'")
 
-    statistic: str = kwargs.get("statistic", "mean")
+    if "statistic" in kwargs:
+        statistics = kwargs["statistic"]
 
-    if statistic not in STATISTIC_FUNCS:
+    if statistics not in STATISTIC_FUNCS:
         raise ValueError(
-            f"Unsupported statistic: '{statistic}'. "
+            f"Unsupported statistic: '{statistics}'. "
             f"Use one of {list(STATISTIC_FUNCS.keys())}."
         )
 
-    agg_func = STATISTIC_FUNCS[statistic]
+    agg_func = STATISTIC_FUNCS[statistics]
     img_shape = ch_data_list[0].shape
 
     # 1. Define the padded bounding box, clamped to image boundaries.
     min_r, min_c, max_r, max_c = cell.bbox
     pad_min_r = max(0, min_r - ring_width)
     pad_min_c = max(0, min_c - ring_width)
-    pad_max_r = min(img_shape[1], max_r + ring_width)
-    pad_max_c = min(img_shape[2], max_c + ring_width)
+
+    if ch_data_list[0].ndim == 3:
+        img_h, img_w = img_shape[1], img_shape[2]
+    else:
+        img_h, img_w = img_shape[0], img_shape[1]
+    pad_max_r = min(img_h, max_r + ring_width)
+    pad_max_c = min(img_w, max_c + ring_width)
 
     # 2. Create the ring mask, which will have the same dimensions as the ROI.
     pad_top = min_r - pad_min_r
@@ -172,7 +187,10 @@ def ring_signal(
     # 3. Apply mask and calculate statistic for each channel.
     results = []
     for signal_da in ch_data_list:
-        roi = signal_da[t, pad_min_r:pad_max_r, pad_min_c:pad_max_c]
+        if signal_da.ndim == 3:
+            roi = signal_da[t, pad_min_r:pad_max_r, pad_min_c:pad_max_c]
+        else:
+            roi = signal_da[pad_min_r:pad_max_r, pad_min_c:pad_max_c]
 
         # This is a sanity check. Under the current logic, this should never fail.
         # It protects against future regressions or unexpected array-like inputs.

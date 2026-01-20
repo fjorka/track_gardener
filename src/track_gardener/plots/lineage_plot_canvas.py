@@ -53,6 +53,7 @@ class LineagePlotCanvas(GraphicsLayoutWidget):
         self.session = session
         self.viewer = viewer
         self.labels = self.viewer.layers["Labels"]
+        self.tree = None
 
         # initialize graph
         self.plot_view = self.addPlot(
@@ -207,6 +208,7 @@ class LineagePlotCanvas(GraphicsLayoutWidget):
 
         else:
             self.viewer.status = "Error - no such label in the database."
+            self.tree = None
 
     def render_tree_view(self, G: nx.DiGraph) -> None:
         """

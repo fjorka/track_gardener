@@ -91,9 +91,10 @@ def create_calculate_signals_function(
 
         Args:
             cell: A `RegionProperties` object for the cell from `skimage.measure`.
-            t: The time point (frame index) of the measurement.
-            ch_data_list: A list of 3D dask arrays, where each array is the
-            specific signal channel.
+            t: The time point (frame index) of the measurement. Ignored for 2D
+                arrays.
+            ch_data_list: A list of dask arrays (2D or 3D), where each array is
+            the specific signal channel.
 
         Returns:
             A dictionary where keys are the final measurement names and values

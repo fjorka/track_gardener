@@ -127,7 +127,7 @@ class SignalPlotCanvas(GraphicsLayoutWidget):
         """Removes existing tags and draws updated ones on the plot."""
 
         # remove previous tags
-        for item in self.plot_view.items:
+        for item in list(self.plot_view.items):
             if isinstance(item, TextItem):
                 self.plot_view.removeItem(item)
 

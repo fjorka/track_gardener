@@ -64,7 +64,18 @@ def segm_and_geff_to_TG(
         )
 
     # Create the tracks table
-    G, _ = geff.read_nx(geff_group_path)
+    geff_reader = geff.GeffReader(geff_group_path)
+
+    # Load all node and edge properties (or select specific ones)
+    geff_reader.read_node_props()
+    geff_reader.read_edge_props()
+
+    # Read the data into memory
+    in_memory_geff = geff_reader.build()
+
+    # Construct a graph representation using the "networkx" backend
+    G = geff.construct(**in_memory_geff, backend="networkx")
+
     G = assign_tracklet_ids(G, attribute_name="track_id")
     G_tracklets = build_tracklet_graph(
         G, attribute_name="track_id", prop_names=["t"]
